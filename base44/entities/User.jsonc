@@ -1,0 +1,93 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "description": "The role of the user in the app",
+      "enum": [
+        "admin",
+        "user"
+      ]
+    },
+    "profile": {
+      "type": "string",
+      "description": "Access profile: admin (full access to all patients) or patient (own data only)",
+      "enum": [
+        "admin",
+        "patient"
+      ],
+      "default": "patient"
+    },
+    "language": {
+      "type": "string",
+      "description": "Preferred UI language code (en, pt, es, it, fr, ko, ja)",
+      "default": "en"
+    },
+    "theme": {
+      "type": "string",
+      "description": "UI theme preference",
+      "enum": [
+        "light",
+        "dark"
+      ],
+      "default": "light"
+    },
+    "preferences": {
+      "type": "object",
+      "description": "User preferences persisted to DB: notifications, security, privacy settings",
+      "properties": {
+        "notifications": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "sound": {
+              "type": "boolean",
+              "default": true
+            },
+            "vibration": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "security": {
+          "type": "object",
+          "properties": {
+            "pinLock": {
+              "type": "boolean",
+              "default": false
+            },
+            "pin": {
+              "type": "string",
+              "description": "4-digit PIN hash (stored, not displayed)"
+            },
+            "biometrics": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "privacy": {
+          "type": "object",
+          "properties": {
+            "dataCollection": {
+              "type": "boolean",
+              "default": true
+            },
+            "dataSharing": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "role"
+  ]
+}

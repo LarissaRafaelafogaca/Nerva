@@ -1,0 +1,101 @@
+{
+  "name": "Medication",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Medication name"
+    },
+    "dosage": {
+      "type": "string",
+      "description": "Dosage amount, e.g. 200mg"
+    },
+    "frequency": {
+      "type": "string",
+      "description": "How often to take it, e.g. 2x/day"
+    },
+    "times": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Scheduled times of day, e.g. [08:00, 20:00]"
+    },
+    "color": {
+      "type": "string",
+      "description": "UI color identifier for the medication",
+      "enum": [
+        "emerald",
+        "teal",
+        "cyan",
+        "lime",
+        "green",
+        "amber",
+        "rose",
+        "violet"
+      ],
+      "default": "emerald"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

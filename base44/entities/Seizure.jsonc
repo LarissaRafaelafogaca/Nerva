@@ -1,0 +1,97 @@
+{
+  "name": "Seizure",
+  "type": "object",
+  "properties": {
+    "date_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the seizure occurred"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "focal",
+        "generalized",
+        "absence",
+        "tonic_clonic",
+        "myoclonic",
+        "other"
+      ]
+    },
+    "duration_minutes": {
+      "type": "number",
+      "description": "Duration in minutes"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "mild",
+        "moderate",
+        "severe"
+      ]
+    },
+    "triggers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Possible triggers: stress, sleep_deprivation, missed_medication, etc."
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "date_time"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
