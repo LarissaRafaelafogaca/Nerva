@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/use-toast';
 import { Activity, Plus, Trash2, Edit2 } from 'lucide-react';
 
 const SEIZURE_TYPES = ['focal', 'generalized', 'absence', 'tonic_clonic', 'myoclonic', 'other'];
@@ -64,9 +65,18 @@ export default function Seizures() {
     setDialogOpen(true);
   };
 
+  const [saving, setSaving] = useState(false);
+
   const save = async () => {
+    setSaving(true);
     try {
-      const data = { ...form, duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null };
+      // Converte o valor do input datetime-local para ISO completo (UTC).
+      const iso = form.date_time ? new Date(form.date_time).toISOString() : null;
+      const data = {
+        ...form,
+        date_time: iso,
+        duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
+      };
       if (editing) {
         await base44.entities.Seizure.update(editing.id, data);
       } else {
@@ -76,6 +86,9 @@ export default function Seizures() {
       loadData();
     } catch (err) {
       console.error(err);
+      toast({ title: t('common.saveError') || 'Não foi possível salvar', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -270,7 +283,7 @@ export default function Seizures() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={save}>{t('common.save')}</Button>
+            <Button onClick={save} disabled={saving}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

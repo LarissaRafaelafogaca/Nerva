@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Lock, Loader2, Shield, Heart, Eye, EyeOff, Check } from "lucide-react";
+import { User, Mail, Lock, Loader2, Eye, EyeOff, Check } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
@@ -18,13 +18,13 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [profile, setProfile] = useState("patient");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [showOtp, setShowOtp] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [devOtp, setDevOtp] = useState("");
 
   const validatePassword = (pwd) => {
     if (pwd.length < 8) return false;
@@ -50,7 +50,12 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await base44.auth.register({ email, password });
+      const res = await base44.auth.register({ email, password });
+      // Em desenvolvimento (sem SMTP), o backend devolve o código para facilitar.
+      if (res?.dev_otp) {
+        setOtpCode(res.dev_otp);
+        setDevOtp(res.dev_otp);
+      }
       setShowOtp(true);
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -66,11 +71,12 @@ export default function Register() {
       const result = await base44.auth.verifyOtp({ email, otpCode });
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
-        // Save profile and full name after authentication
+        // Salva o nome após a autenticação. O perfil (paciente/admin) é
+        // definido pelo servidor com base no e-mail autorizado, não pelo cliente.
         try {
-          await base44.auth.updateMe({ profile, full_name: fullName });
+          await base44.auth.updateMe({ full_name: fullName });
         } catch {
-          // Profile save is best-effort; continue to redirect
+          // Best-effort; segue para o redirect
         }
       }
       window.location.href = safeReturnTo();
@@ -104,6 +110,11 @@ export default function Register() {
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
             {error}
+          </div>
+        )}
+        {devOtp && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm text-center">
+            Modo desenvolvimento (sem e-mail configurado): seu código é <strong>{devOtp}</strong>
           </div>
         )}
         <div className="flex justify-center mb-6">
@@ -261,48 +272,6 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Profile selection */}
-        <div className="space-y-2">
-          <Label>{t('auth.profileLabel')}</Label>
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              onClick={() => setProfile("admin")}
-              className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
-                profile === "admin"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/40"
-              }`}
-            >
-              <div className={`mt-0.5 p-1.5 rounded-lg ${profile === "admin" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                <Shield className="w-4 h-4" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">{t('auth.profileAdmin')}</p>
-                <p className="text-xs text-muted-foreground">{t('auth.profileAdminDesc')}</p>
-              </div>
-              {profile === "admin" && <Check className="w-4 h-4 text-primary mt-1" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setProfile("patient")}
-              className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
-                profile === "patient"
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/40"
-              }`}
-            >
-              <div className={`mt-0.5 p-1.5 rounded-lg ${profile === "patient" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                <Heart className="w-4 h-4" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">{t('auth.profilePatient')}</p>
-                <p className="text-xs text-muted-foreground">{t('auth.profilePatientDesc')}</p>
-              </div>
-              {profile === "patient" && <Check className="w-4 h-4 text-primary mt-1" />}
-            </button>
-          </div>
-        </div>
 
         {/* Terms acceptance */}
         <div className="flex items-start gap-2.5 pt-1">

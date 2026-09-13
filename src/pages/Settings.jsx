@@ -13,8 +13,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { toast } from '@/components/ui/use-toast';
-import { Sun, Moon, Globe, Bell, BellOff, Volume2, Smartphone, Shield, Lock, Fingerprint, FileText, Trash2, Download, ChevronRight, Info as InfoIcon, Database, Share2, ScrollText, BookOpen } from 'lucide-react';
+import { Sun, Moon, Globe, Bell, BellOff, Volume2, Smartphone, Shield, Lock, Fingerprint, ScanFace, FileText, Trash2, Download, ChevronRight, Info as InfoIcon, Database, Share2, ScrollText, BookOpen, Send, Loader2 } from 'lucide-react';
 import NervaLogo from '@/components/NervaLogo';
+import { enablePush, disablePush, sendTestNotification, isPushSupported, needsInstallFirst, permissionStatus, isIOS } from '@/lib/pushClient';
+import { registerBiometric, clearBiometric, isPlatformAuthenticatorAvailable, verifyBiometric } from '@/lib/biometrics';
 
 export default function Settings() {
   const { t, lang, changeLanguage, languages } = useI18n();
@@ -28,8 +30,66 @@ export default function Settings() {
   const [pinValue, setPinValue] = useState('');
   const [firstPin, setFirstPin] = useState('');
   const [pinError, setPinError] = useState('');
+
+  // Push / lembretes
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushOn, setPushOn] = useState(permissionStatus() === 'granted');
+
+  const handleEnablePush = async () => {
+    setPushBusy(true);
+    try {
+      const res = await enablePush();
+      if (res.ok) {
+        setPushOn(true);
+        updateNotifications('enabled', true);
+        toast({ title: t('settings.remindersEnabled') });
+      } else {
+        const messages = {
+          install_first: t('settings.pushInstallFirst'),
+          denied: t('settings.pushDenied'),
+          unsupported: t('settings.pushUnsupported'),
+          no_key: t('settings.pushUnsupported'),
+          error: t('settings.pushError'),
+        };
+        toast({ title: messages[res.reason] || t('settings.pushError'), variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: t('settings.pushError'), variant: 'destructive' });
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    setPushBusy(true);
+    try {
+      await disablePush();
+      setPushOn(false);
+      updateNotifications('enabled', false);
+      toast({ title: t('settings.remindersDisabled') });
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleTestPush = async () => {
+    setPushBusy(true);
+    try {
+      const res = await sendTestNotification();
+      toast({
+        title: res?.sent > 0 ? t('settings.testSent') : t('settings.testNoDevice'),
+      });
+    } catch {
+      toast({ title: t('settings.pushError'), variant: 'destructive' });
+    } finally {
+      setPushBusy(false);
+    }
+  };
   const [dataCollectionOpen, setDataCollectionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [verifyDeleteOpen, setVerifyDeleteOpen] = useState(false);
+  const [deletePin, setDeletePin] = useState('');
+  const [deletePinError, setDeletePinError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   const handlePinToggle = (enabled) => {
@@ -65,15 +125,22 @@ export default function Settings() {
     }
   };
 
-  const handleBiometricsToggle = (enabled) => {
+  const handleBiometricsToggle = async (enabled) => {
     if (enabled) {
-      if (navigator.credentials?.create) {
+      const available = await isPlatformAuthenticatorAvailable();
+      if (!available) {
+        toast({ title: t('settings.biometricsNotAvailable'), variant: 'destructive' });
+        return;
+      }
+      try {
+        await registerBiometric(user?.id, user?.full_name || user?.email);
         updateSecurity('biometrics', true);
         toast({ title: t('settings.biometricsEnabled') });
-      } else {
+      } catch {
         toast({ title: t('settings.biometricsNotAvailable'), variant: 'destructive' });
       }
     } else {
+      clearBiometric();
       updateSecurity('biometrics', false);
     }
   };
@@ -110,6 +177,19 @@ export default function Settings() {
   };
 
   const deleteAllData = async () => {
+    // Se houver bloqueio ativo (PIN/biometria), exige verificação antes de apagar.
+    const lockOn = prefs?.security?.pinLock || prefs?.security?.biometrics;
+    if (lockOn) {
+      setDeleteOpen(false);
+      setDeletePin('');
+      setDeletePinError('');
+      setVerifyDeleteOpen(true);
+      return;
+    }
+    await runDeletion();
+  };
+
+  const runDeletion = async () => {
     setDeleting(true);
     try {
       const userId = user?.id;
@@ -121,6 +201,7 @@ export default function Settings() {
         await base44.entities.SideEffect.deleteMany({ created_by_id: userId });
       }
       setDeleteOpen(false);
+      setVerifyDeleteOpen(false);
       toast({ title: t('settings.deleteSuccess') });
       navigate('/dashboard');
     } catch (err) {
@@ -128,6 +209,34 @@ export default function Settings() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Verificação por PIN antes de apagar.
+  const confirmDeleteWithPin = async (value) => {
+    setDeleting(true);
+    setDeletePinError('');
+    try {
+      const ok = await base44.auth.verifyPin(value);
+      if (ok) {
+        await runDeletion();
+      } else {
+        setDeletePinError(t('lock.pinWrong'));
+        setDeletePin('');
+      }
+    } catch {
+      setDeletePinError(t('lock.pinWrong'));
+      setDeletePin('');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Verificação por biometria antes de apagar.
+  const confirmDeleteWithBiometric = async () => {
+    setDeletePinError('');
+    const ok = await verifyBiometric();
+    if (ok) await runDeletion();
+    else setDeletePinError(t('lock.bioFailed'));
   };
 
   const SettingRow = ({ icon: Icon, label, children, onClick, showChevron }) => (
@@ -212,6 +321,44 @@ export default function Settings() {
         <SettingRow icon={Smartphone} label={t('settings.notifVibration')}>
           <Switch checked={prefs.notifications.vibration} onCheckedChange={(v) => updateNotifications('vibration', v)} disabled={!prefs.notifications.enabled} />
         </SettingRow>
+
+        {/* Lembretes de dose (push) */}
+        <div className="border-t border-border mt-1 pt-3">
+          {isPushSupported() ? (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">{t('settings.remindersHint')}</p>
+              {needsInstallFirst() && (
+                <div className="p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+                  {t('settings.pushInstallFirst')}
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                {pushOn ? (
+                  <Button variant="outline" onClick={handleDisablePush} disabled={pushBusy} className="w-full">
+                    {pushBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <BellOff className="w-4 h-4 mr-2" />}
+                    {t('settings.disableReminders')}
+                  </Button>
+                ) : (
+                  <Button onClick={handleEnablePush} disabled={pushBusy || needsInstallFirst()} className="w-full">
+                    {pushBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
+                    {t('settings.enableReminders')}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleTestPush} disabled={pushBusy || !pushOn} className="w-full">
+                  <Send className="w-4 h-4 mr-2" />
+                  {t('settings.testReminder')}
+                </Button>
+              </div>
+            </div>
+          ) : isIOS() ? (
+            // iOS no Safari (ainda não instalado): orienta a instalar primeiro.
+            <div className="p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
+              {t('settings.pushInstallFirst')}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t('settings.pushUnsupported')}</p>
+          )}
+        </div>
       </Card>
 
       {/* Security */}
@@ -221,7 +368,7 @@ export default function Settings() {
           <Switch checked={prefs.security.pinLock} onCheckedChange={handlePinToggle} />
         </SettingRow>
         <div className="border-t border-border" />
-        <SettingRow icon={Fingerprint} label={t('settings.biometrics')}>
+        <SettingRow icon={isIOS() ? ScanFace : Fingerprint} label={isIOS() ? t('settings.faceId') : t('settings.biometrics')}>
           <Switch checked={prefs.security.biometrics} onCheckedChange={handleBiometricsToggle} />
         </SettingRow>
       </Card>
@@ -326,6 +473,50 @@ export default function Settings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Verificação (PIN/biometria) antes de excluir todos os dados */}
+      <Dialog open={verifyDeleteOpen} onOpenChange={(o) => { if (!deleting) setVerifyDeleteOpen(o); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>{t('settings.deleteVerifyTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center py-3 gap-4">
+            <p className="text-sm text-muted-foreground text-center">{t('settings.deleteVerifyBody')}</p>
+            {deletePinError && <p className="text-sm text-destructive">{deletePinError}</p>}
+            {prefs.security.pinLock && (
+              <InputOTP
+                maxLength={4}
+                value={deletePin}
+                onChange={(v) => {
+                  setDeletePin(v);
+                  setDeletePinError('');
+                  if (v.length === 4 && !deleting) confirmDeleteWithPin(v);
+                }}
+                autoFocus
+                disabled={deleting}
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                </InputOTPGroup>
+              </InputOTP>
+            )}
+            {prefs.security.biometrics && (
+              <Button variant="outline" className="w-full" onClick={confirmDeleteWithBiometric} disabled={deleting}>
+                <Fingerprint className="w-4 h-4 mr-2" />
+                {t('lock.unlockBiometric')}
+              </Button>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVerifyDeleteOpen(false)} disabled={deleting}>
+              {t('common.cancel')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

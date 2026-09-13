@@ -5,9 +5,21 @@ import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/AuthContext';
 import { ensureTodayDoses, calculateAdherence, getGreeting, formatTime, formatDate } from '@/lib/doseUtils';
 import { medColorMap } from '@/lib/medColors';
+import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
+import { toast } from '@/components/ui/use-toast';
+import confetti from 'canvas-confetti';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, X, Moon, Activity, TrendingUp, Plus, Clock, ChevronRight, Award } from 'lucide-react';
+
+// Pequena explosão de confete para celebrar conquistas.
+function celebrate() {
+  try {
+    confetti({ particleCount: 90, spread: 70, origin: { y: 0.7 }, colors: ['#0f766e', '#14b8a6', '#f59e0b'] });
+  } catch {
+    /* ambiente sem suporte */
+  }
+}
 
 export default function Dashboard() {
   const { t } = useI18n();
@@ -48,7 +60,8 @@ export default function Dashboard() {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Recarrega ao entrar na tela, ao focar o app e a cada 20s (atualização "ao vivo").
+  useRefreshOnFocus(loadData, { intervalMs: 20000 });
 
   const markDose = async (dose, status) => {
     try {
@@ -56,10 +69,43 @@ export default function Dashboard() {
         status,
         taken_at: status === 'taken' ? new Date().toISOString() : null,
       });
-      setTodayDoses((prev) => prev.map((d) => (d.id === dose.id ? { ...d, status } : d)));
-      setAllDoses((prev) => prev.map((d) => (d.id === dose.id ? { ...d, status } : d)));
+      const nextToday = todayDoses.map((d) => (d.id === dose.id ? { ...d, status } : d));
+      const nextAll = allDoses.map((d) => (d.id === dose.id ? { ...d, status } : d));
+      setTodayDoses(nextToday);
+      setAllDoses(nextAll);
+
+      if (status === 'taken') {
+        // Todas as doses de hoje resolvidas (tomadas ou puladas)?
+        const allResolved =
+          nextToday.length > 0 &&
+          nextToday.every((d) => d.status === 'taken' || d.status === 'skipped');
+        const anyTaken = nextToday.some((d) => d.status === 'taken');
+
+        if (allResolved && anyTaken) {
+          celebrate();
+          toast({ title: t('dashboard.allDoneTitle'), description: t('dashboard.allDoneBody') });
+        } else {
+          toast({ title: t('dashboard.doseTakenTitle') });
+        }
+
+        // Marco de sequência (streak) — parabeniza ao cruzar 3, 7, 14, 30, ...
+        const newStreak = calculateStreak(nextAll);
+        celebrateStreakIfMilestone(newStreak);
+      }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const lastStreakToast = React.useRef(0);
+  const celebrateStreakIfMilestone = (streakValue) => {
+    const milestones = [3, 7, 14, 21, 30, 60, 90, 180, 365];
+    if (streakValue > 0 && milestones.includes(streakValue) && lastStreakToast.current !== streakValue) {
+      lastStreakToast.current = streakValue;
+      celebrate();
+      const isBig = streakValue >= 30;
+      const title = (isBig ? t('dashboard.streakMilestone') : t('dashboard.streakTitle')).replace('{n}', streakValue);
+      toast({ title, description: t('dashboard.streakBody') });
     }
   };
 
@@ -119,8 +165,13 @@ export default function Dashboard() {
             </div>
             <div className="flex items-end gap-1">
               <span className="text-3xl font-bold">{streak}</span>
-              <span className="text-sm text-muted-foreground mb-1">{t('dashboard.daysAdherent')}</span>
+              <span className="text-sm text-muted-foreground mb-1 break-keep">{t('dashboard.daysAdherent')}</span>
             </div>
+            {streak > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium break-keep">
+                {t('dashboard.streakBody')}
+              </p>
+            )}
           </div>
         </Card>
       </div>
@@ -259,22 +310,55 @@ function capFirst(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Conta dias consecutivos de adesão terminando em hoje.
+// Um dia é "aderente" quando pelo menos uma dose foi tomada e nenhuma dose que
+// já venceu ficou como perdida. Regras:
+//  - HOJE conta se já houve alguma dose tomada e nenhuma "missed" (doses ainda
+//    pendentes de hoje NÃO quebram, pois o dia não acabou).
+//  - Dias anteriores contam se tiveram ao menos uma dose e nenhuma "missed".
+//  - Dias sem nenhuma dose registrada não quebram a sequência (são ignorados).
 function calculateStreak(allDoses) {
-  // Group by date
   const byDate = {};
   for (const d of allDoses) {
-    if (!byDate[d.scheduled_date]) byDate[d.scheduled_date] = [];
-    byDate[d.scheduled_date].push(d);
+    if (!d.scheduled_date) continue;
+    (byDate[d.scheduled_date] = byDate[d.scheduled_date] || []).push(d);
   }
+
   const today = new Date().toISOString().split('T')[0];
+
+  const dayStatus = (doses, isToday) => {
+    const taken = doses.filter((d) => d.status === 'taken').length;
+    const missed = doses.filter((d) => d.status === 'missed').length;
+    if (missed > 0) return 'broken';
+    if (taken > 0) return 'adherent';
+    // sem tomadas: se for hoje e ainda há pendentes, é "neutro" (não quebra);
+    // em dias passados sem tomadas e sem missed, também tratamos como neutro.
+    return 'neutral';
+  };
+
   let streak = 0;
-  const dates = Object.keys(byDate).sort().reverse();
-  for (const date of dates) {
-    if (date === today) continue; // skip today (not over yet)
-    const doses = byDate[date];
-    const allTaken = doses.every((d) => d.status === 'taken' || d.status === 'skipped');
-    if (allTaken) streak++;
-    else break;
+  const cursor = new Date(today + 'T00:00:00');
+  for (let i = 0; i < 365; i++) {
+    const dateStr = cursor.toISOString().split('T')[0];
+    const doses = byDate[dateStr];
+    const isToday = dateStr === today;
+
+    if (doses && doses.length) {
+      const status = dayStatus(doses, isToday);
+      if (status === 'adherent') {
+        streak++;
+      } else if (status === 'broken') {
+        break; // dose perdida quebra a sequência
+      } else if (!isToday) {
+        // dia passado com doses mas sem nenhuma tomada → quebra
+        break;
+      }
+      // hoje 'neutral' (só pendentes): não soma e não quebra
+    } else if (!isToday) {
+      // dia passado sem nenhuma dose registrada → fim da sequência
+      break;
+    }
+    cursor.setDate(cursor.getDate() - 1);
   }
   return streak;
 }

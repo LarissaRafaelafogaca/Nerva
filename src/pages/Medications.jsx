@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { useI18n } from '@/lib/i18n';
 import { ensureTodayDoses, formatTime } from '@/lib/doseUtils';
 import { medColorMap, medColorKeys } from '@/lib/medColors';
+import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +38,9 @@ export default function Medications() {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Pausa o auto-refresh enquanto o diálogo de adicionar/editar está aberto,
+  // para a tela não se atualizar sozinha no meio do preenchimento.
+  useRefreshOnFocus(loadData, { intervalMs: 20000, paused: dialogOpen || !!deleteTarget });
 
   const openAdd = () => {
     setEditingMed(null);

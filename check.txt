@@ -1,0 +1,2 @@
+HEALTH: ok
+ERRO: O servidor remoto retornou um erro: (401) No Autorizado.

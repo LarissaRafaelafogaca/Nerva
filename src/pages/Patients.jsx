@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useI18n } from '@/lib/i18n';
 import { useAuth } from '@/lib/AuthContext';
 import { calculateAdherence, formatDate } from '@/lib/doseUtils';
+import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Users, Activity, TrendingUp, Pill, ChevronRight, Mail, Calendar, Moon } from 'lucide-react';
@@ -48,7 +49,8 @@ export default function Patients() {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Atualiza ao abrir a tela, ao focar o app e a cada 20s.
+  useRefreshOnFocus(loadData, { intervalMs: 20000 });
 
   // Per-patient stats
   const patientStats = useMemo(() => {

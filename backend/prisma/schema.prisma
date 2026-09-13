@@ -1,0 +1,293 @@
+// NERVA — Prisma schema
+// Banco: PostgreSQL. Toda alteração estrutural é versionada via `prisma migrate`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------- Enums -------------------------
+
+enum Role {
+  user
+  admin
+}
+
+enum Profile {
+  patient
+  admin
+}
+
+enum AuthProvider {
+  local
+  google
+}
+
+enum Theme {
+  light
+  dark
+}
+
+enum DoseStatus {
+  pending
+  taken
+  missed
+  skipped
+}
+
+enum SeizureType {
+  focal
+  generalized
+  absence
+  tonic_clonic
+  myoclonic
+  other
+}
+
+enum Severity {
+  mild
+  moderate
+  severe
+}
+
+enum SleepQuality {
+  poor
+  fair
+  good
+  excellent
+}
+
+enum Mood {
+  great
+  good
+  okay
+  bad
+  awful
+}
+
+// ------------------------- Usuário -------------------------
+
+model User {
+  id            String       @id @default(uuid())
+  email         String       @unique
+  passwordHash  String?      @map("password_hash") // nullable p/ contas Google
+  fullName      String?      @map("full_name")
+  role          Role         @default(user)
+  profile       Profile      @default(patient)
+  provider      AuthProvider @default(local)
+  providerId    String?      @map("provider_id")
+  language      String       @default("en")
+  theme         Theme        @default(light)
+  preferences   Json?
+  emailVerified Boolean      @default(false) @map("email_verified")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  medications              Medication[]
+  doseLogs                 DoseLog[]
+  seizures                 Seizure[]
+  sideEffects              SideEffect[]
+  sleepRecords             SleepRecord[]
+  refreshTokens            RefreshToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  passwordResetTokens      PasswordResetToken[]
+  pushSubscriptions        PushSubscription[]
+  moodLogs                 MoodLog[]
+
+  @@index([provider, providerId])
+  @@map("users")
+}
+
+// ------------------------- Sessões / tokens -------------------------
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  codeHash  String    @map("code_hash") // OTP hasheado
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ------------------------- Domínio clínico -------------------------
+
+model Medication {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  dosage    String?
+  frequency String?
+  times     String[] @default([])
+  color     String   @default("emerald")
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doseLogs    DoseLog[]
+  sideEffects SideEffect[]
+
+  @@index([userId])
+  @@map("medications")
+}
+
+model DoseLog {
+  id             String     @id @default(uuid())
+  userId         String     @map("user_id")
+  medicationId   String     @map("medication_id")
+  medicationName String?    @map("medication_name")
+  scheduledDate  String     @map("scheduled_date") // YYYY-MM-DD
+  scheduledTime  String?    @map("scheduled_time") // HH:MM
+  status         DoseStatus @default(pending)
+  takenAt        DateTime?  @map("taken_at")
+  notes          String?
+  reminderSentAt DateTime?  @map("reminder_sent_at") // quando o lembrete push foi enviado
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medication Medication? @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  // Impede duplicação da mesma dose programada
+  @@unique([userId, medicationId, scheduledDate, scheduledTime], name: "uniq_scheduled_dose")
+  @@index([userId])
+  @@index([userId, scheduledDate])
+  @@index([medicationId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("dose_logs")
+}
+
+model Seizure {
+  id              String       @id @default(uuid())
+  userId          String       @map("user_id")
+  dateTime        DateTime     @map("date_time")
+  type            SeizureType?
+  durationMinutes Float?       @map("duration_minutes")
+  severity        Severity?
+  triggers        String[]     @default([])
+  notes           String?
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, dateTime])
+  @@map("seizures")
+}
+
+model SideEffect {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  date           String // YYYY-MM-DD
+  medicationId   String?   @map("medication_id")
+  medicationName String?   @map("medication_name")
+  description    String
+  severity       Severity?
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SetNull: excluir o medicamento não destrói o histórico do efeito
+  medication Medication? @relation(fields: [medicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, date])
+  @@index([medicationId])
+  @@map("side_effects")
+}
+
+model SleepRecord {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  date      String // YYYY-MM-DD
+  hours     Float
+  quality   SleepQuality?
+  bedtime   String?
+  wakeTime  String?       @map("wake_time")
+  notes     String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Um registro por dia por usuário
+  @@unique([userId, date], name: "uniq_sleep_per_day")
+  @@index([userId])
+  @@index([userId, date])
+  @@map("sleep_records")
+}
+
+// Inscrição de Web Push (um por dispositivo/navegador do usuário).
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// Check-in de humor diário (um registro por dia por usuário).
+model MoodLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  date      String // YYYY-MM-DD
+  mood      Mood
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date], name: "uniq_mood_per_day")
+  @@index([userId])
+  @@index([userId, date])
+  @@map("mood_logs")
+}

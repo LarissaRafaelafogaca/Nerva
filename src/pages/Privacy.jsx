@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import NervaLogo from '@/components/NervaLogo';
@@ -7,16 +7,20 @@ import { useI18n } from '@/lib/i18n';
 
 export default function Privacy() {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const goBack = () => {
+    // Volta para de onde veio (ex.: Configurações). Se não houver histórico, vai ao início.
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/settings');
+  };
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between gap-2 mb-6">
           <NervaLogo size={32} withText />
-          <Link to="/">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-1.5" />{t('common.back')}
-            </Button>
-          </Link>
+          <Button variant="outline" size="default" className="h-11 px-4 shrink-0" onClick={goBack}>
+            <ArrowLeft className="w-4 h-4 mr-1.5" />{t('common.back')}
+          </Button>
         </div>
         <h1 className="text-2xl font-bold mb-4">{t('settings.privacyPolicy')}</h1>
         <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground space-y-4">

@@ -85,14 +85,21 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Mobile Top Bar */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 h-14 border-b border-border bg-background/95 backdrop-blur">
+      {/* Mobile Top Bar (respeita a safe-area do iPhone: notch / Dynamic Island) */}
+      <header
+        className="lg:hidden sticky top-0 z-40 flex items-center justify-between px-4 border-b border-border bg-background/95 backdrop-blur"
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          height: 'calc(3.5rem + env(safe-area-inset-top))',
+        }}
+      >
         <NervaLogo size={30} withText />
         <button
           onClick={() => setMobileOpen(true)}
-          className="p-2 rounded-lg hover:bg-accent"
+          aria-label="Menu"
+          className="p-2 -mr-2 rounded-lg hover:bg-accent"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="w-6 h-6" />
         </button>
       </header>
 
@@ -100,7 +107,7 @@ export default function AppLayout() {
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-72 bg-sidebar border-r border-border flex flex-col animate-in slide-in-from-left duration-200">
+          <div className="absolute left-0 top-0 bottom-0 w-72 bg-sidebar border-r border-border flex flex-col animate-in slide-in-from-left duration-200" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
             <div className="flex items-center justify-between p-5 border-b border-border">
               <NervaLogo size={32} withText />
               <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-accent">
@@ -138,8 +145,11 @@ export default function AppLayout() {
         </div>
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around h-16 border-t border-border bg-background/95 backdrop-blur px-1">
+      {/* Mobile Bottom Nav (respeita a safe-area inferior do iPhone) */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around h-16 border-t border-border bg-background/95 backdrop-blur px-1"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)', height: 'calc(4rem + env(safe-area-inset-bottom))' }}
+      >
         {mobileNavItems.map((item) => {
           const active = location.pathname === item.path;
           return (

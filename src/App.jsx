@@ -6,9 +6,12 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
+import DoseActionHandler from './components/DoseActionHandler';
 import { I18nProvider } from '@/lib/i18n';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import { PreferencesProvider } from '@/lib/PreferencesContext';
+import { LockProvider } from '@/lib/LockContext';
+import LockScreen from '@/components/LockScreen';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import AppLayout from '@/components/AppLayout';
 import Welcome from '@/pages/Welcome';
@@ -87,13 +90,17 @@ function App() {
       <I18nProvider>
         <ThemeProvider>
           <PreferencesProvider>
-            <QueryClientProvider client={queryClientInstance}>
-              <Router>
-                <ScrollToTop />
-                <AuthenticatedApp />
-              </Router>
-              <Toaster />
-            </QueryClientProvider>
+            <LockProvider>
+              <QueryClientProvider client={queryClientInstance}>
+                <Router>
+                  <ScrollToTop />
+                  <DoseActionHandler />
+                  <AuthenticatedApp />
+                  <LockScreen />
+                </Router>
+                <Toaster />
+              </QueryClientProvider>
+            </LockProvider>
           </PreferencesProvider>
         </ThemeProvider>
       </I18nProvider>
