@@ -1,33 +1,28 @@
-import nodemailer, { Transporter } from 'nodemailer';
 import { env } from '../../config/env';
 
-let transporter: Transporter | null = null;
+// Envia e-mail via Resend (se RESEND_API_KEY estiver configurado) ou loga no
+// console em desenvolvimento. Nunca expõe dados sensíveis em produção.
+async function sendMail(to: string, subject: string, text: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
 
-function getTransporter(): Transporter | null {
-  if (!env.smtp.host) return null;
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: env.smtp.host,
-      port: env.smtp.port,
-      secure: env.smtp.secure,
-      auth: env.smtp.user ? { user: env.smtp.user, pass: env.smtp.password } : undefined,
+  if (apiKey) {
+    // Usa o Resend (produção)
+    const { Resend } = await import('resend');
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: process.env.MAIL_FROM || 'Nerva <onboarding@resend.dev>',
+      to,
+      subject,
+      text,
     });
-  }
-  return transporter;
-}
-
-// Envia e-mail. Se SMTP não estiver configurado (dev), apenas registra no console
-// SEM expor dados sensíveis em produção.
-export async function sendMail(to: string, subject: string, text: string): Promise<void> {
-  const t = getTransporter();
-  if (!t) {
-    if (!env.isProd) {
-      // eslint-disable-next-line no-console
-      console.log(`[MAIL:dev] to=${to} subject="${subject}"\n${text}`);
-    }
     return;
   }
-  await t.sendMail({ from: env.smtp.from, to, subject, text });
+
+  // Sem SMTP/Resend configurado: loga no console (desenvolvimento)
+  if (!env.isProd) {
+    // eslint-disable-next-line no-console
+    console.log(`[MAIL:dev] to=${to} subject="${subject}"\n${text}`);
+  }
 }
 
 export async function sendOtpEmail(to: string, code: string): Promise<void> {
