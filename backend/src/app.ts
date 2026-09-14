@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import apiRoutes from './routes';
+import seedRoute from './routes/seed';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { openapiSpec } from './docs/openapi';
 
@@ -30,6 +31,7 @@ export function createApp(): Application {
   app.get('/api/openapi.json', (_req, res) => res.json(openapiSpec));
 
   app.use('/api', apiRoutes);
+  app.use('/api', seedRoute);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
