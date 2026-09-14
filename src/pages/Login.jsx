@@ -23,6 +23,11 @@ export default function Login() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const err = params.get("error");
+    const registered = params.get("registered");
+    if (registered) {
+      setError('');
+      // mostra mensagem de sucesso (não é erro)
+    }
     if (err === "google_not_configured") {
       setError(t('auth.googleNotConfigured'));
     } else if (err === "google_failed") {

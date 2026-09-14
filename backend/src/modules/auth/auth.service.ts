@@ -100,14 +100,27 @@ export async function register(input: {
           provider: 'local',
           role,
           profile,
+          // Em produção sem SMTP configurado, verifica automaticamente para
+          // não bloquear o cadastro. O e-mail pode ser verificado depois.
+          emailVerified: !process.env.SMTP_HOST && !process.env.RESEND_API_KEY
+            ? true
+            : false,
         },
       });
 
-  const devCode = await createAndSendOtp(user.id, email);
-  // Em desenvolvimento sem SMTP configurado, devolvemos o código para permitir
-  // concluir o cadastro localmente. NUNCA acontece em produção.
-  const exposeDevCode = !env.isProd && !env.smtp.host;
-  return { email, ...(exposeDevCode ? { dev_otp: devCode } : {}) };
+  // Só envia OTP se houver serviço de e-mail configurado.
+  const hasEmail = !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY);
+  if (hasEmail && !user.emailVerified) {
+    const devCode = await createAndSendOtp(user.id, email);
+    const exposeDevCode = !env.isProd && !env.smtp.host;
+    return { email, ...(exposeDevCode ? { dev_otp: devCode } : {}) };
+  }
+
+  // Sem e-mail: marca como verificado e retorna sem OTP.
+  if (!user.emailVerified) {
+    await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+  }
+  return { email, auto_verified: true } as { email: string; auto_verified?: boolean };
 }
 
 async function createAndSendOtp(userId: string, email: string): Promise<string> {

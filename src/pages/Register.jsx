@@ -51,6 +51,11 @@ export default function Register() {
     setLoading(true);
     try {
       const res = await base44.auth.register({ email, password });
+      // Se o backend verificou automaticamente (sem e-mail), vai direto para login.
+      if (res?.auto_verified) {
+        window.location.href = '/login?registered=1';
+        return;
+      }
       // Em desenvolvimento (sem SMTP), o backend devolve o código para facilitar.
       if (res?.dev_otp) {
         setOtpCode(res.dev_otp);
