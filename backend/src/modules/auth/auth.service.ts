@@ -233,11 +233,19 @@ export async function upsertGoogleUser(input: {
         profile,
       },
     });
-  } else if (user.provider !== 'google' && !user.providerId) {
-    // vincula conta local existente ao Google (e reforça o papel autorizado)
+  } else {
+    // Sempre atualiza o papel (role/profile) para garantir que o admin
+    // autorizado tenha o papel correto, independente de como a conta foi criada.
     user = await prisma.user.update({
       where: { id: user.id },
-      data: { provider: 'google', providerId: input.providerId, emailVerified: true, role, profile },
+      data: {
+        provider: 'google',
+        providerId: input.providerId,
+        emailVerified: true,
+        role,
+        profile,
+        fullName: user.fullName ?? input.fullName ?? undefined,
+      },
     });
   }
   const tokens = await issueTokens(user);
