@@ -100,16 +100,17 @@ export async function register(input: {
           provider: 'local',
           role,
           profile,
-          // Em produção sem SMTP configurado, verifica automaticamente para
-          // não bloquear o cadastro. O e-mail pode ser verificado depois.
-          emailVerified: !process.env.SMTP_HOST && !process.env.RESEND_API_KEY
+          // Se SKIP_EMAIL_VERIFICATION=true ou não há serviço de e-mail, verifica automaticamente.
+          emailVerified: process.env.SKIP_EMAIL_VERIFICATION === 'true' ||
+            (!process.env.SMTP_HOST && !process.env.RESEND_API_KEY)
             ? true
             : false,
         },
       });
 
   // Só envia OTP se houver serviço de e-mail configurado.
-  const hasEmail = !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY);
+  const hasEmail = !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY) &&
+    process.env.SKIP_EMAIL_VERIFICATION !== 'true';
   if (hasEmail && !user.emailVerified) {
     const devCode = await createAndSendOtp(user.id, email);
     const exposeDevCode = !env.isProd && !env.smtp.host;
