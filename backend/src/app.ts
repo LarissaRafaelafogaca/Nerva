@@ -31,7 +31,7 @@ export function createApp(): Application {
   app.get('/api/openapi.json', (_req, res) => res.json(openapiSpec));
 
   // Seed temporário — antes das rotas autenticadas
-  app.use('/api', seedRoute);
+  // app.use('/api', seedRoute); // REMOVIDO após setup inicial
   app.use('/api', apiRoutes);
 
   app.use(notFoundHandler);
