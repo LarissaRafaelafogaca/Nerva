@@ -175,6 +175,12 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     serialize: serializeSideEffect,
     createSchema: sideEffectCreate,
     updateSchema: sideEffectCreate.partial(),
+    // Converte string vazia de medication_id para null — FK não aceita ''.
+    coerce: (d) => {
+      if (d.medication_id === '') d.medication_id = null;
+      if (d.medication_name === '') d.medication_name = null;
+      return d;
+    },
   },
   'sleep-records': {
     model: 'sleepRecord',

@@ -51,6 +51,7 @@ export default function SideEffects() {
 
   const openAdd = () => {
     setEditing(null);
+    setSaveError('');
     setForm({
       date: new Date().toISOString().split('T')[0],
       medication_id: '', medication_name: '', description: '', severity: 'mild', notes: '',
@@ -60,6 +61,7 @@ export default function SideEffects() {
 
   const openEdit = (rec) => {
     setEditing(rec);
+    setSaveError('');
     setForm({
       date: rec.date || new Date().toISOString().split('T')[0],
       medication_id: rec.medication_id || '',
@@ -71,13 +73,21 @@ export default function SideEffects() {
     setDialogOpen(true);
   };
 
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   const save = async () => {
     if (!form.description.trim()) return;
+    if (saving) return; // previne cliques duplos
+    setSaving(true);
+    setSaveError('');
     try {
       const med = meds.find((m) => m.id === form.medication_id);
       const data = {
         ...form,
-        medication_name: med ? med.name : form.medication_name,
+        // Garante que string vazia vira null — FK não aceita string vazia
+        medication_id: form.medication_id || null,
+        medication_name: med ? med.name : (form.medication_name || null),
       };
       if (editing) {
         await base44.entities.SideEffect.update(editing.id, data);
@@ -88,6 +98,9 @@ export default function SideEffects() {
       loadData();
     } catch (err) {
       console.error(err);
+      setSaveError(t('common.saveError') || 'Não foi possível salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -234,10 +247,15 @@ export default function SideEffects() {
               <Label htmlFor="seNotes">{t('common.notes')} ({t('common.optional')})</Label>
               <Textarea id="seNotes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
             </div>
+            {saveError && (
+              <p className="text-sm text-destructive">{saveError}</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={save} disabled={!form.description.trim()}>{t('common.save')}</Button>
+            <Button onClick={save} disabled={!form.description.trim() || saving}>
+              {saving ? t('common.loading') : t('common.save')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
