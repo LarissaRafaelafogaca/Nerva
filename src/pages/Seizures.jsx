@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useI18n } from '@/lib/i18n';
 import { formatDate } from '@/lib/doseUtils';
@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { toast } from '@/components/ui/use-toast';
-import { Activity, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Activity, Plus, Trash2, Edit2, TrendingDown, Calendar } from 'lucide-react';
 
 const SEIZURE_TYPES = ['focal', 'generalized', 'absence', 'tonic_clonic', 'myoclonic', 'other'];
 const SEVERITIES = ['mild', 'moderate', 'severe'];
@@ -114,11 +115,54 @@ export default function Seizures() {
 
   const sevColor = { mild: 'text-amber-500 bg-amber-500/10', moderate: 'text-orange-500 bg-orange-500/10', severe: 'text-rose-500 bg-rose-500/10' };
 
-  const thisMonth = seizures.filter((s) => {
-    const d = new Date(s.date_time);
+  // Estatísticas automáticas calculadas dos registros existentes
+  const stats = useMemo(() => {
     const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last7Start = new Date(now); last7Start.setDate(last7Start.getDate() - 7);
+    const last30Start = new Date(now); last30Start.setDate(last30Start.getDate() - 30);
+
+    const thisMonth = seizures.filter((s) => new Date(s.date_time) >= thisMonthStart).length;
+    const lastMonth = seizures.filter((s) => {
+      const d = new Date(s.date_time);
+      return d >= lastMonthStart && d < thisMonthStart;
+    }).length;
+    const last7 = seizures.filter((s) => new Date(s.date_time) >= last7Start).length;
+    const last30 = seizures.filter((s) => new Date(s.date_time) >= last30Start).length;
+
+    // Trend vs mês anterior
+    const trend = lastMonth === 0 ? null : Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+
+    // Gráfico: últimos 6 meses
+    const monthly = [];
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const count = seizures.filter((s) => { const d = new Date(s.date_time); return d >= start && d < end; }).length;
+      const label = start.toLocaleDateString(undefined, { month: 'short' });
+      monthly.push({ label, count, isCurrentMonth: i === 0 });
+    }
+
+    // Distribuição por tipo
+    const byType = {};
+    for (const s of seizures) {
+      if (s.type) byType[s.type] = (byType[s.type] || 0) + 1;
+    }
+
+    // Gatilhos mais frequentes
+    const byTrigger = {};
+    for (const s of seizures) {
+      for (const tr of (s.triggers || [])) {
+        if (tr !== 'triggerNone') byTrigger[tr] = (byTrigger[tr] || 0) + 1;
+      }
+    }
+    const topTriggers = Object.entries(byTrigger).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    return { thisMonth, lastMonth, last7, last30, trend, monthly, byType, topTriggers };
+  }, [seizures]);
+
+  const thisMonth = stats.thisMonth; // mantém compatibilidade
 
   if (loading) {
     return (
@@ -141,15 +185,71 @@ export default function Seizures() {
       </div>
 
       {seizures.length > 0 && (
-        <Card className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
-            <Activity className="w-5 h-5" />
+        <div className="space-y-3">
+          {/* Cards de estatísticas automáticas */}
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Activity className="w-4 h-4 text-rose-500" />
+                <span className="text-xs text-muted-foreground">{t('seizures.thisMonth')}</span>
+              </div>
+              <p className="text-3xl font-bold">{stats.thisMonth}</p>
+              {stats.trend !== null && (
+                <p className={`text-xs mt-1 font-medium ${stats.trend < 0 ? 'text-emerald-600' : stats.trend > 0 ? 'text-rose-600' : 'text-muted-foreground'}`}>
+                  {stats.trend < 0 ? `↓ ${Math.abs(stats.trend)}%` : stats.trend > 0 ? `↑ ${stats.trend}%` : '='} {t('seizures.vsLastMonth')}
+                </p>
+              )}
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Calendar className="w-4 h-4 text-amber-500" />
+                <span className="text-xs text-muted-foreground">{t('seizures.last30')}</span>
+              </div>
+              <p className="text-3xl font-bold">{stats.last30}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('seizures.last7Label')}: {stats.last7}</p>
+            </Card>
           </div>
-          <div>
-            <p className="text-2xl font-bold">{thisMonth}</p>
-            <p className="text-xs text-muted-foreground">{t('seizures.seizureCount')}</p>
-          </div>
-        </Card>
+
+          {/* Gráfico: últimos 6 meses */}
+          <Card className="p-4">
+            <p className="text-xs font-medium text-muted-foreground mb-3">{t('seizures.monthlyChart')}</p>
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.monthly} margin={{ top: 2, right: 4, left: -28, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    content={({ active, payload }) => active && payload?.length ? (
+                      <div className="bg-card border border-border rounded-lg p-2 shadow text-xs">
+                        <p className="font-medium">{payload[0].payload.label}</p>
+                        <p className="text-muted-foreground">{payload[0].value} {t('seizures.seizuresLabel')}</p>
+                      </div>
+                    ) : null}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {stats.monthly.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.isCurrentMonth ? '#f43f5e' : '#fca5a5'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          {/* Gatilhos mais frequentes */}
+          {stats.topTriggers.length > 0 && (
+            <Card className="p-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">{t('seizures.topTriggers')}</p>
+              <div className="flex flex-wrap gap-2">
+                {stats.topTriggers.map(([trigger, count]) => (
+                  <span key={trigger} className="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 font-medium">
+                    {t(`seizures.${trigger}`)} ({count})
+                  </span>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
       )}
 
       {seizures.length === 0 ? (
