@@ -59,6 +59,8 @@ export default function Sleep() {
     return saved ? parseFloat(saved) : DEFAULT_GOAL;
   });
   const [goalInput, setGoalInput] = useState(String(sleepGoal));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -99,13 +101,15 @@ export default function Sleep() {
   const openAdd = () => {
     setEditing(null);
     setQualityManual(false);
+    setSaveError('');
     setForm({ date: new Date().toISOString().split('T')[0], bedtime: '23:00', wake_time: '07:00', quality: 'good', notes: '' });
     setDialogOpen(true);
   };
 
   const openEdit = (rec) => {
     setEditing(rec);
-    setQualityManual(true); // ao editar, a qualidade salva é tratada como manual
+    setQualityManual(true);
+    setSaveError('');
     setForm({
       date: rec.date || new Date().toISOString().split('T')[0],
       bedtime: rec.bedtime || '23:00',
@@ -118,6 +122,9 @@ export default function Sleep() {
 
   const save = async () => {
     const hours = calculatedHours ?? 0;
+    if (hours <= 0) return; // não salva sem horas calculadas
+    setSaving(true);
+    setSaveError('');
     try {
       const data = { ...form, hours };
       if (editing) {
@@ -129,6 +136,9 @@ export default function Sleep() {
       loadData();
     } catch (err) {
       console.error(err);
+      setSaveError(t('common.saveError') || 'Não foi possível salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -138,6 +148,7 @@ export default function Sleep() {
       loadData();
     } catch (err) {
       console.error(err);
+      setSaveError(t('common.saveError') || 'Não foi possível excluir');
     }
   };
 
@@ -409,10 +420,13 @@ function suggestQuality(hours, goal) {
               <Label htmlFor="sleepNotes">{t('common.notes')} ({t('common.optional')})</Label>
               <Textarea id="sleepNotes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
             </div>
+            {saveError && <p className="text-sm text-destructive">{saveError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={save} disabled={!calculatedHours || calculatedHours <= 0}>{t('common.save')}</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? t('common.loading') : t('common.save')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

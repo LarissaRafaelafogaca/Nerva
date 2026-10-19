@@ -101,6 +101,7 @@ export default function Seizures() {
       loadData();
     } catch (err) {
       console.error(err);
+      toast({ title: t('common.saveError') || 'Não foi possível excluir', variant: 'destructive' });
     }
   };
 
