@@ -121,8 +121,13 @@ export default function Sleep() {
   };
 
   const save = async () => {
-    const hours = calculatedHours ?? 0;
-    if (hours <= 0) return; // não salva sem horas calculadas
+    // Calcula as horas diretamente aqui (não depende do useMemo que pode estar defasado)
+    const hours = calcSleepHours(form.bedtime, form.wake_time) ?? 0;
+    if (hours <= 0) {
+      setSaveError('Informe os horários de dormir e acordar para calcular as horas.');
+      return;
+    }
+    if (saving) return;
     setSaving(true);
     setSaveError('');
     try {

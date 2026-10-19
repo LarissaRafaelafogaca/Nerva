@@ -86,7 +86,7 @@ const sideEffectCreate = z.object({
 // ---------- SleepRecord ----------
 const sleepCreate = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  hours: z.number().min(0).max(24),
+  hours: z.number().min(0).max(24).optional(), // opcional: calculado de bedtime/wake_time se ausente
   quality: z.enum(['poor', 'fair', 'good', 'excellent']).optional().nullable(),
   bedtime: z.string().optional().nullable(),
   wake_time: z.string().optional().nullable(),
@@ -199,6 +199,17 @@ export const RESOURCES: Record<string, ResourceConfig> = {
     serialize: serializeSleepRecord,
     createSchema: sleepCreate,
     updateSchema: sleepCreate.partial(),
+    // Se hours não veio (ou veio como 0), calcula de bedtime/wake_time.
+    coerce: (d) => {
+      if ((!d.hours || d.hours <= 0) && d.bedtime && d.wake_time) {
+        const [bh, bm] = String(d.bedtime).split(':').map(Number);
+        const [wh, wm] = String(d.wake_time).split(':').map(Number);
+        let min = (wh * 60 + wm) - (bh * 60 + bm);
+        if (min <= 0) min += 24 * 60;
+        d.hours = Math.round((min / 60) * 10) / 10;
+      }
+      return d;
+    },
   },
 };
 
