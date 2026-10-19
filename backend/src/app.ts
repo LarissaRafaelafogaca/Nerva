@@ -30,8 +30,8 @@ export function createApp(): Application {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
   app.get('/api/openapi.json', (_req, res) => res.json(openapiSpec));
 
-  // Seed temporário — DESATIVADO após setup inicial de produção
-  // app.use('/api', seedRoute);
+  // Seed temporário — reativado para corrigir papel admin
+  app.use('/api', seedRoute);
   app.use('/api', apiRoutes);
 
   app.use(notFoundHandler);

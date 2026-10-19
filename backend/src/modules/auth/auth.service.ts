@@ -248,16 +248,19 @@ export async function upsertGoogleUser(input: {
       },
     });
   } else {
-    // Sempre atualiza o papel (role/profile) para garantir que o admin
-    // autorizado tenha o papel correto, independente de como a conta foi criada.
+    // Atualiza o Google provider/emailVerified, mas PRESERVA o role/profile
+    // existente se já for admin — evita rebaixar acidentalmente o admin
+    // quando ADMIN_EMAILS não está configurado ou lido corretamente.
+    const keepRole = (user.role === 'admin' || user.profile === 'admin') ? user.role : role;
+    const keepProfile = (user.role === 'admin' || user.profile === 'admin') ? user.profile : profile;
     user = await prisma.user.update({
       where: { id: user.id },
       data: {
         provider: 'google',
         providerId: input.providerId,
         emailVerified: true,
-        role,
-        profile,
+        role: keepRole,
+        profile: keepProfile,
         fullName: user.fullName ?? input.fullName ?? undefined,
       },
     });
