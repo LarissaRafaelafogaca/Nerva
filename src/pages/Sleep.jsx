@@ -67,9 +67,20 @@ export default function Sleep() {
     quality: 'good',
     notes: '',
   });
+  // Rastreia se o usuário ajustou a qualidade manualmente
+  const [qualityManual, setQualityManual] = useState(false);
 
   // Horas calculadas automaticamente enquanto preenche o formulário.
   const calculatedHours = useMemo(() => calcSleepHours(form.bedtime, form.wake_time), [form.bedtime, form.wake_time]);
+
+  // Atualiza a qualidade sugerida automaticamente quando as horas mudam,
+  // a não ser que o usuário já tenha escolhido manualmente.
+  useEffect(() => {
+    if (!qualityManual && calculatedHours) {
+      const suggested = suggestQuality(calculatedHours, sleepGoal);
+      setForm((prev) => ({ ...prev, quality: suggested }));
+    }
+  }, [calculatedHours, sleepGoal, qualityManual]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -87,12 +98,14 @@ export default function Sleep() {
 
   const openAdd = () => {
     setEditing(null);
+    setQualityManual(false);
     setForm({ date: new Date().toISOString().split('T')[0], bedtime: '23:00', wake_time: '07:00', quality: 'good', notes: '' });
     setDialogOpen(true);
   };
 
   const openEdit = (rec) => {
     setEditing(rec);
+    setQualityManual(true); // ao editar, a qualidade salva é tratada como manual
     setForm({
       date: rec.date || new Date().toISOString().split('T')[0],
       bedtime: rec.bedtime || '23:00',
@@ -161,7 +174,15 @@ export default function Sleep() {
     excellent: 'text-primary bg-primary/10'
   };
 
-  // Gera mensagem automática comparando com a meta.
+  // Sugere a qualidade do sono com base nas horas dormidas vs meta.
+function suggestQuality(hours, goal) {
+  if (!hours || !goal) return 'good';
+  const pct = (hours / goal) * 100;
+  if (pct >= 100) return 'excellent';
+  if (pct >= 85) return 'good';
+  if (pct >= 70) return 'fair';
+  return 'poor';
+}
   function getSleepMessage(hours, goal) {
     if (!hours || !goal) return null;
     const diff = parseFloat((hours - goal).toFixed(1));
@@ -354,13 +375,18 @@ export default function Sleep() {
             )}
 
             <div className="space-y-2">
-              <Label>{t('sleep.quality')}</Label>
+              <div className="flex items-center justify-between">
+                <Label>{t('sleep.quality')}</Label>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${qualityManual ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'}`}>
+                  {qualityManual ? t('sleep.qualityManual') : t('sleep.qualityAuto')}
+                </span>
+              </div>
               <div className="grid grid-cols-4 gap-1.5">
                 {QUALITIES.map((q) => (
                   <button
                     key={q}
                     type="button"
-                    onClick={() => setForm({ ...form, quality: q })}
+                    onClick={() => { setQualityManual(true); setForm({ ...form, quality: q }); }}
                     className={`px-2 py-2 rounded-lg text-xs font-medium border-2 capitalize transition-colors ${
                       form.quality === q ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground'
                     }`}
@@ -369,6 +395,15 @@ export default function Sleep() {
                   </button>
                 ))}
               </div>
+              {qualityManual && (
+                <button
+                  type="button"
+                  onClick={() => setQualityManual(false)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {t('sleep.resetQuality')}
+                </button>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="sleepNotes">{t('common.notes')} ({t('common.optional')})</Label>

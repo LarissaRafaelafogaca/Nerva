@@ -163,6 +163,9 @@ const en = {
     metGoal: "You slept {h}h — {h}h meets your {goal}h goal. 🎉",
     belowGoal: "You slept {h}h — {diff}h below your {goal}h goal.",
     metGoalLegend: "≥ {goal}h goal",
+    qualityAuto: "auto-suggested",
+    qualityManual: "adjusted",
+    resetQuality: "← reset to automatic suggestion",
   },
   info: {
     title: "Info & Support", subtitle: "Learn about epilepsy, treatment, and getting support",
@@ -397,6 +400,9 @@ const pt = {
     metGoal: "Você dormiu {h}h — atingiu sua meta de {goal}h. 🎉",
     belowGoal: "Você dormiu {h}h — {diff}h abaixo da sua meta de {goal}h.",
     metGoalLegend: "≥ {goal}h de meta",
+    qualityAuto: "sugerida automaticamente",
+    qualityManual: "ajustada",
+    resetQuality: "← voltar para sugestão automática",
   },
   info: {
     title: "Info & Suporte", subtitle: "Saiba sobre epilepsia, tratamento e suporte",
