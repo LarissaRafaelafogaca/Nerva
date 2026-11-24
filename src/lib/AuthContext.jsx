@@ -81,8 +81,14 @@ export const AuthProvider = ({ children }) => {
     try {
       // Now check if the user is authenticated
       setIsLoadingAuth(true);
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
+      const response = await base44.auth.me();
+      // O endpoint /me re-emite o access token com role/profile frescos do banco.
+      // Se veio um token novo, substitui o atual para que role/profile reflitam
+      // imediatamente qualquer mudança (ex.: promoção a admin).
+      if (response?.access_token) {
+        base44.auth.setToken(response.access_token);
+      }
+      setUser(response);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
       setAuthChecked(true);

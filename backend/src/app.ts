@@ -16,7 +16,17 @@ export function createApp(): Application {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.corsOrigin,
+      // Em produção aceita qualquer subdomínio do Vercel além das origens
+      // explícitas no CORS_ORIGIN, para que o deploy automático do frontend
+      // (que gera URLs únicas por commit) funcione sem precisar atualizar o env.
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // server-to-server / curl
+        const allowed =
+          env.corsOrigin.includes(origin) ||
+          /^https:\/\/[\w-]+(\.vercel\.app)$/.test(origin) ||
+          /^https:\/\/[\w-]+(\.up\.railway\.app)$/.test(origin);
+        callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
+      },
       credentials: true,
     }),
   );

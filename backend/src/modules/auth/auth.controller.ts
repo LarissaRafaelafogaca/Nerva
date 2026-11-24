@@ -73,7 +73,10 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 
 export async function me(req: Request, res: Response): Promise<void> {
   const user = await authService.getMe(req.user!.id);
-  res.json(user);
+  // Re-emite o access token com os dados atuais do banco (role/profile podem ter
+  // mudado desde que o token foi emitido — ex.: promoção a admin via ADMIN_EMAILS).
+  const { access_token } = await authService.reissueAccessToken(req.user!.id);
+  res.json({ ...user, access_token });
 }
 
 export async function updateMe(req: Request, res: Response): Promise<void> {

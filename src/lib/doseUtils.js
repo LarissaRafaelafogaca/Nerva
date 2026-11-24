@@ -20,40 +20,15 @@ export function formatTime(timeStr) {
   return `${displayHour}:${m || '00'} ${ampm}`;
 }
 
-// Ensure today's dose logs exist for all active medications
-export async function ensureTodayDoses(medications) {
+// Busca (e gera no servidor se necessário) as doses do dia atual.
+// Usa o endpoint dedicado /api/doses?date=... do backend, que:
+//   - gera doses pending para medicamentos ativos do dia (server-side, sem duplicação)
+//   - retorna o estado atual — incluindo doses já marcadas como missed pelo cron
+// O parâmetro `medications` é mantido por compatibilidade mas não é mais usado.
+export async function ensureTodayDoses(_medications) {
   const { base44 } = await import('@/api/base44Client');
-  // Auto-mark past pending doses as missed before generating today's doses
-  await markMissedDoses();
   const today = todayStr();
-  const existing = await base44.entities.DoseLog.filter({ scheduled_date: today });
-  const existingKeys = new Set(existing.map((d) => `${d.medication_id}_${d.scheduled_time}`));
-
-  const toCreate = [];
-  for (const med of medications) {
-    if (!med.active) continue;
-    const times = med.times?.length ? med.times : ['08:00'];
-    for (const time of times) {
-      const key = `${med.id}_${time}`;
-      if (!existingKeys.has(key)) {
-        toCreate.push({
-          medication_id: med.id,
-          medication_name: med.name,
-          scheduled_date: today,
-          scheduled_time: time,
-          status: 'pending',
-        });
-      }
-    }
-  }
-
-  if (toCreate.length > 0) {
-    await base44.entities.DoseLog.bulkCreate(toCreate);
-  }
-
-  // Return merged list
-  const all = [...existing, ...toCreate];
-  return all.sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''));
+  return base44.doses.getToday(today);
 }
 
 // Calculate adherence rate from dose logs
@@ -88,33 +63,4 @@ export function getGreeting(t) {
   return t('dashboard.greetingNight');
 }
 
-// Auto-mark pending doses as missed if past their scheduled time.
-// - Doses from previous days → missed
-// - Today's doses with a 2-hour grace period past scheduled_time → missed
-export async function markMissedDoses() {
-  const { base44 } = await import('@/api/base44Client');
-  const today = todayStr();
-  const now = new Date();
-  const gracePeriodMinutes = 120; // 2 hours
 
-  const pending = await base44.entities.DoseLog.filter({ status: 'pending' });
-
-  const toMiss = pending.filter((d) => {
-    if (!d.scheduled_date) return false;
-    if (d.scheduled_date < today) return true;
-    if (d.scheduled_date === today && d.scheduled_time) {
-      const [dh, dm] = d.scheduled_time.split(':').map(Number);
-      const doseMinutes = (dh || 0) * 60 + (dm || 0);
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
-      return (nowMinutes - doseMinutes) > gracePeriodMinutes;
-    }
-    return false;
-  });
-
-  if (toMiss.length > 0) {
-    await base44.entities.DoseLog.bulkUpdate(
-      toMiss.map((d) => ({ id: d.id, status: 'missed' }))
-    );
-  }
-  return toMiss.length;
-}

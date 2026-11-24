@@ -17,6 +17,7 @@ import { Sun, Moon, Globe, Bell, BellOff, Volume2, Smartphone, Shield, Lock, Fin
 import NervaLogo from '@/components/NervaLogo';
 import { enablePush, disablePush, sendTestNotification, isPushSupported, needsInstallFirst, permissionStatus, isIOS } from '@/lib/pushClient';
 import { registerBiometric, clearBiometric, isPlatformAuthenticatorAvailable, verifyBiometric } from '@/lib/biometrics';
+import { exportToExcel } from '@/lib/exportExcel';
 
 export default function Settings() {
   const { t, lang, changeLanguage, languages } = useI18n();
@@ -154,24 +155,17 @@ export default function Settings() {
         base44.entities.SleepRecord.list('-date', 500),
         base44.entities.SideEffect.list('-date', 500),
       ]);
-      const data = {
-        exportedAt: new Date().toISOString(),
-        user: { email: user?.email, name: user?.full_name },
+      exportToExcel({
+        user: { email: user?.email, full_name: user?.full_name },
         medications: meds,
         doseLogs: doses,
         seizures,
         sleepRecords: sleep,
         sideEffects,
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nerva-data-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      });
       toast({ title: t('settings.exportSuccess') });
     } catch (err) {
+      console.error(err);
       toast({ title: t('settings.exportFailed'), variant: 'destructive' });
     }
   };

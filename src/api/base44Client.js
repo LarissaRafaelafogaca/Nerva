@@ -17,6 +17,37 @@ export const base44 = {
     SideEffect: createEntityClient('side-effects'),
     SleepRecord: createEntityClient('sleep-records'),
   },
+
+  // Endpoint dedicado de doses — geração server-side + adesão.
+  doses: {
+    // Retorna (e gera se necessário) as doses de uma data. date = 'YYYY-MM-DD'.
+    getToday(date) {
+      return http.get('/doses', { query: { date } });
+    },
+    getAdherence(days) {
+      return http.get('/doses/adherence', { query: { days } });
+    },
+    take(id) {
+      return http.post(`/doses/${id}/take`, {});
+    },
+    skip(id) {
+      return http.post(`/doses/${id}/skip`, {});
+    },
+  },
+
+  // Endpoints administrativos — retornam dados de TODOS os pacientes.
+  admin: {
+    getPatients() {
+      return http.get('/admin/patients');
+    },
+    getPatient(id) {
+      return http.get(`/admin/patients/${id}`);
+    },
+    getEpidemiology() {
+      return http.get('/admin/epidemiology');
+    },
+  },
+
   auth: authClient,
   app: {
     async getPublicSettings() {

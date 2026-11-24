@@ -65,11 +65,15 @@ export default function Dashboard() {
 
   const markDose = async (dose, status) => {
     try {
-      await base44.entities.DoseLog.update(dose.id, {
-        status,
-        taken_at: status === 'taken' ? new Date().toISOString() : null,
-      });
-      const nextToday = todayDoses.map((d) => (d.id === dose.id ? { ...d, status } : d));
+      let updated;
+      if (status === 'taken') {
+        updated = await base44.doses.take(dose.id);
+      } else if (status === 'skipped') {
+        updated = await base44.doses.skip(dose.id);
+      } else {
+        updated = await base44.entities.DoseLog.update(dose.id, { status });
+      }
+      const nextToday = todayDoses.map((d) => (d.id === dose.id ? { ...d, status, ...(updated || {}) } : d));
       const nextAll = allDoses.map((d) => (d.id === dose.id ? { ...d, status } : d));
       setTodayDoses(nextToday);
       setAllDoses(nextAll);

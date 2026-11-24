@@ -233,6 +233,10 @@ export async function upsertGoogleUser(input: {
   profile?: 'patient' | 'admin';
 }): Promise<AuthTokens & { user: any }> {
   const email = input.email.toLowerCase();
+  // O role/profile é SEMPRE derivado do ADMIN_EMAILS — se o email consta na
+  // lista, ele é admin independentemente do que estava salvo no banco. Isso
+  // garante que adicionar um email ao ADMIN_EMAILS tenha efeito imediato no
+  // próximo login, sem precisar alterar manualmente o banco.
   const { role, profile } = roleForEmail(email);
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
@@ -248,19 +252,14 @@ export async function upsertGoogleUser(input: {
       },
     });
   } else {
-    // Atualiza o Google provider/emailVerified, mas PRESERVA o role/profile
-    // existente se já for admin — evita rebaixar acidentalmente o admin
-    // quando ADMIN_EMAILS não está configurado ou lido corretamente.
-    const keepRole = (user.role === 'admin' || user.profile === 'admin') ? user.role : role;
-    const keepProfile = (user.role === 'admin' || user.profile === 'admin') ? user.profile : profile;
     user = await prisma.user.update({
       where: { id: user.id },
       data: {
         provider: 'google',
         providerId: input.providerId,
         emailVerified: true,
-        role: keepRole,
-        profile: keepProfile,
+        role,
+        profile,
         fullName: user.fullName ?? input.fullName ?? undefined,
       },
     });
@@ -357,6 +356,14 @@ export async function getMe(userId: string): Promise<any> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Unauthorized('User not found');
   return serializeUser(user);
+}
+
+// Emite um novo access token com os dados atuais do banco para o usuário.
+// Usado pelo endpoint /me para garantir que role/profile estejam sempre frescos.
+export async function reissueAccessToken(userId: string): Promise<{ access_token: string }> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw Unauthorized('User not found');
+  return { access_token: accessTokenFor(user) };
 }
 
 // Verifica o PIN de bloqueio de tela do usuário autenticado (contra o hash argon2).

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useI18n } from '@/lib/i18n';
-import { calculateAdherence, getLastNDays, formatDate, markMissedDoses } from '@/lib/doseUtils';
+import { calculateAdherence, getLastNDays, formatDate } from '@/lib/doseUtils';
 import { medColorMap } from '@/lib/medColors';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,6 @@ export default function Adherence() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      await markMissedDoses();
       const days = 90;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
