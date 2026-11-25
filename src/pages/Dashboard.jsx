@@ -46,11 +46,11 @@ export default function Dashboard() {
       const sleepList = await base44.entities.SleepRecord.list('-date', 1);
       setSleep(sleepList[0] || null);
 
-      // Load last 30 days of doses for adherence streak
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      // Carrega 180 dias de doses para cálculo de streak e adesão
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 180);
       const allDoseLogs = await base44.entities.DoseLog.filter({
-        scheduled_date: { $gte: thirtyDaysAgo.toISOString().split('T')[0] },
+        scheduled_date: { $gte: startDate.toISOString().split('T')[0] },
       });
       setAllDoses(allDoseLogs);
     } catch (err) {
