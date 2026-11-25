@@ -45,6 +45,19 @@ export async function create(
 ): Promise<any> {
   const model = getModelDelegate(cfg.model);
   const data = { ...toPrismaData(feData, cfg), userId: user.id };
+
+  // SleepRecord tem unique(userId, date) — faz upsert para não falhar se o
+  // usuário tentar registrar sono duas vezes no mesmo dia.
+  if (cfg.model === 'sleepRecord' && (data as any).date) {
+    const date = (data as any).date as string;
+    const row = await model.upsert({
+      where: { uniq_sleep_per_day: { userId: user.id, date } },
+      update: data,
+      create: data,
+    });
+    return cfg.serialize(row);
+  }
+
   const row = await model.create({ data });
   return cfg.serialize(row);
 }
