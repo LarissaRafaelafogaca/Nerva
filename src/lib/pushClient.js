@@ -57,7 +57,8 @@ function urlBase64ToUint8Array(base64String) {
 // | 'denied' | 'no_key' | 'error'.
 export async function enablePush() {
   if (!isPushSupported()) return { ok: false, reason: 'unsupported' };
-  if (needsInstallFirst()) return { ok: false, reason: 'install_first' };
+  // No iOS só funciona instalado como PWA, mas tentamos mesmo assim —
+  // se não funcionar, o próprio navegador vai rejeitar com erro claro.
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return { ok: false, reason: 'denied' };

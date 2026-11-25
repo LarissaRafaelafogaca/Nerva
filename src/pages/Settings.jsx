@@ -15,7 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { toast } from '@/components/ui/use-toast';
 import { Sun, Moon, Globe, Bell, BellOff, Volume2, Smartphone, Shield, Lock, Fingerprint, ScanFace, FileText, Trash2, Download, ChevronRight, Info as InfoIcon, Database, Share2, ScrollText, BookOpen, Send, Loader2 } from 'lucide-react';
 import NervaLogo from '@/components/NervaLogo';
-import { enablePush, disablePush, sendTestNotification, isPushSupported, needsInstallFirst, permissionStatus, isIOS } from '@/lib/pushClient';
+import { enablePush, disablePush, sendTestNotification, isPushSupported, needsInstallFirst, permissionStatus, isIOS, isStandalone } from '@/lib/pushClient';
 import { registerBiometric, clearBiometric, isPlatformAuthenticatorAvailable, verifyBiometric } from '@/lib/biometrics';
 import { exportToExcel } from '@/lib/exportExcel';
 
@@ -318,10 +318,10 @@ export default function Settings() {
 
         {/* Lembretes de dose (push) */}
         <div className="border-t border-border mt-1 pt-3">
-          {isPushSupported() ? (
+          {isPushSupported() || isIOS() ? (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">{t('settings.remindersHint')}</p>
-              {needsInstallFirst() && (
+              {isIOS() && !isStandalone() && (
                 <div className="p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
                   {t('settings.pushInstallFirst')}
                 </div>
@@ -333,7 +333,7 @@ export default function Settings() {
                     {t('settings.disableReminders')}
                   </Button>
                 ) : (
-                  <Button onClick={handleEnablePush} disabled={pushBusy || needsInstallFirst()} className="w-full">
+                  <Button onClick={handleEnablePush} disabled={pushBusy} className="w-full">
                     {pushBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
                     {t('settings.enableReminders')}
                   </Button>
@@ -343,11 +343,6 @@ export default function Settings() {
                   {t('settings.testReminder')}
                 </Button>
               </div>
-            </div>
-          ) : isIOS() ? (
-            // iOS no Safari (ainda não instalado): orienta a instalar primeiro.
-            <div className="p-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
-              {t('settings.pushInstallFirst')}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">{t('settings.pushUnsupported')}</p>
