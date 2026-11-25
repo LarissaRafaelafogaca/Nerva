@@ -145,8 +145,11 @@ export default function Sleep() {
     setQualityManual(false);
     setSaveError('');
     setSaving(false);
+    // Usa data local (não UTC) para evitar virada de dia em fusos negativos
+    const now = new Date();
+    const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     setForm({
-      date: new Date().toISOString().split('T')[0],
+      date: localDate,
       bedtime: '23:00',
       wake_time: '07:00',
       quality: 'good',
@@ -196,7 +199,13 @@ export default function Sleep() {
       if (editing) {
         await base44.entities.SleepRecord.update(editing.id, data);
       } else {
-        await base44.entities.SleepRecord.create(data);
+        // Verifica se já existe um registro para essa data — se sim, edita.
+        const existing = records.find((r) => r.date === form.date);
+        if (existing) {
+          await base44.entities.SleepRecord.update(existing.id, data);
+        } else {
+          await base44.entities.SleepRecord.create(data);
+        }
       }
       setDialogOpen(false);
       loadData();
