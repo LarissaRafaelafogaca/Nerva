@@ -49,8 +49,12 @@ export default function Dashboard() {
       // Carrega 180 dias de doses para cálculo de streak e adesão
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 180);
+      // Usa data local (não UTC) para não pular um dia em fusos negativos
+      const y = startDate.getFullYear();
+      const m = String(startDate.getMonth() + 1).padStart(2, '0');
+      const dy = String(startDate.getDate()).padStart(2, '0');
       const allDoseLogs = await base44.entities.DoseLog.filter({
-        scheduled_date: { $gte: startDate.toISOString().split('T')[0] },
+        scheduled_date: { $gte: `${y}-${m}-${dy}` },
       });
       setAllDoses(allDoseLogs);
     } catch (err) {

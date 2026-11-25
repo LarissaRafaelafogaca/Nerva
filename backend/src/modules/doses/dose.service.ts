@@ -10,7 +10,16 @@ import { isAdminUser } from '../../middleware/rbac';
 const GRACE_PERIOD_MINUTES = 120;
 
 export function todayStr(now = new Date()): string {
-  return now.toISOString().split('T')[0];
+  // Usa o fuso configurado em APP_TIMEZONE para determinar a data "hoje".
+  // Sem isso, às 21h em Brasília o backend já retorna o dia seguinte (UTC).
+  const tz = process.env.APP_TIMEZONE || 'UTC';
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(now); // retorna YYYY-MM-DD no fuso correto
 }
 
 // Gera as doses previstas para uma data a partir dos medicamentos ativos,
