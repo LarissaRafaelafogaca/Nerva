@@ -2,35 +2,26 @@ import cron from 'node-cron';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { isPushConfigured, sendToUser } from '../modules/push/push.service';
-import { todayStr } from '../modules/doses/dose.service';
 
-// Envia lembretes push das doses do dia quando o horário chega.
-// Regras:
-//  - considera doses pending de hoje;
-//  - dispara quando o horário programado já passou (até 30 min de atraso),
-//    evitando spam de doses muito antigas (essas viram "missed" pelo outro cron);
-//  - envia apenas uma vez (marca reminderSentAt).
-const LATE_WINDOW_MINUTES = 30;
+// Envia lembretes push em 4 momentos por dose:
+//   10 min ANTES  → aviso antecipado (reminderSentAt ainda null)
+//   horário EXATO → alarme principal (marca reminderSentAt)
+//    5 min DEPOIS → lembrete pós, se ainda pending
+//   15 min DEPOIS → último lembrete, se ainda pending
+// Cada janela tem uma tag única para não sobrescrever a anterior no dispositivo.
 
 let task: cron.ScheduledTask | null = null;
 
-// Retorna { date: 'YYYY-MM-DD', minutes } no fuso configurado (APP_TIMEZONE).
-// Os horários das doses são digitados em hora LOCAL, então a comparação precisa
-// ser feita no mesmo fuso — não em UTC.
 function nowInAppTz(now: Date): { date: string; minutes: number } {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: env.appTimezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   });
   const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
   const date = `${parts.year}-${parts.month}-${parts.day}`;
   let hour = parseInt(parts.hour, 10);
-  if (hour === 24) hour = 0; // alguns ambientes retornam 24 à meia-noite
+  if (hour === 24) hour = 0;
   const minutes = hour * 60 + parseInt(parts.minute, 10);
   return { date, minutes };
 }
@@ -40,34 +31,86 @@ export async function runDoseReminders(now = new Date()): Promise<number> {
 
   const { date: today, minutes: nowMinutes } = nowInAppTz(now);
 
-  const pending = await prisma.doseLog.findMany({
-    where: { status: 'pending', scheduledDate: today, reminderSentAt: null },
+  const allToday = await prisma.doseLog.findMany({
+    where: { scheduledDate: today },
   });
 
   let notified = 0;
-  for (const dose of pending) {
+
+  for (const dose of allToday) {
     if (!dose.scheduledTime) continue;
     const [h, m] = dose.scheduledTime.split(':').map((n) => parseInt(n, 10));
     const doseMinutes = (h || 0) * 60 + (m || 0);
-    const delta = nowMinutes - doseMinutes; // minutos desde o horário programado
-    if (delta < 0 || delta > LATE_WINDOW_MINUTES) continue;
+    const delta = nowMinutes - doseMinutes; // negativo = antes do horário
 
-    const sent = await sendToUser(dose.userId, {
-      title: 'Nerva — hora do medicamento',
-      body: dose.medicationName
-        ? `Está na hora de tomar ${dose.medicationName} (${dose.scheduledTime}).`
-        : `Está na hora de tomar seu medicamento (${dose.scheduledTime}).`,
-      tag: `dose-${dose.id}`,
-      url: '/dashboard',
-      data: { doseId: dose.id },
-    });
+    // ── 1. Aviso antecipado: 10 min antes (delta entre -11 e -9) ──────────
+    if (dose.status === 'pending' && dose.reminderSentAt === null) {
+      if (delta >= -11 && delta <= -9) {
+        await sendToUser(dose.userId, {
+          title: '💊 Nerva — medicamento em 10 minutos',
+          body: dose.medicationName
+            ? `Faltam 10 minutos para tomar ${dose.medicationName} (${dose.scheduledTime}). Prepare-se!`
+            : `Faltam 10 minutos para o seu medicamento das ${dose.scheduledTime}.`,
+          tag: `dose-pre-${dose.id}`,
+          url: '/dashboard',
+          data: { doseId: dose.id },
+        });
+        notified += 1;
+      }
+    }
 
-    // Marca como lembrado mesmo se não houver inscrição ativa, para não reprocessar.
-    await prisma.doseLog.update({
-      where: { id: dose.id },
-      data: { reminderSentAt: now },
-    });
-    if (sent > 0) notified += 1;
+    // ── 2. Alarme principal: horário exato (delta entre 0 e 2) ───────────
+    if (dose.status === 'pending' && dose.reminderSentAt === null) {
+      if (delta >= 0 && delta <= 2) {
+        const sent = await sendToUser(dose.userId, {
+          title: '🔔 Nerva — hora do medicamento!',
+          body: dose.medicationName
+            ? `Está na hora de tomar ${dose.medicationName} (${dose.scheduledTime}). Confirme no app!`
+            : `Está na hora do seu medicamento das ${dose.scheduledTime}. Confirme no app!`,
+          tag: `dose-exact-${dose.id}`,
+          url: '/dashboard',
+          data: { doseId: dose.id },
+        });
+        // Marca reminderSentAt para controlar os lembretes pós
+        await prisma.doseLog.update({
+          where: { id: dose.id },
+          data: { reminderSentAt: now },
+        });
+        if (sent > 0) notified += 1;
+      }
+    }
+
+    // ── 3. Lembrete pós 5 min: só se já enviou o principal (delta 5-7) ───
+    if (dose.status === 'pending' && dose.reminderSentAt !== null) {
+      if (delta >= 5 && delta <= 7) {
+        await sendToUser(dose.userId, {
+          title: 'Nerva — você tomou seu medicamento?',
+          body: dose.medicationName
+            ? `Sua dose de ${dose.medicationName} das ${dose.scheduledTime} ainda não foi confirmada.`
+            : `Sua dose das ${dose.scheduledTime} ainda não foi confirmada. Abra o Nerva.`,
+          tag: `dose-post5-${dose.id}`,
+          url: '/dashboard',
+          data: { doseId: dose.id },
+        });
+        notified += 1;
+      }
+    }
+
+    // ── 4. Lembrete final 15 min: só se ainda pending (delta 15-17) ──────
+    if (dose.status === 'pending' && dose.reminderSentAt !== null) {
+      if (delta >= 15 && delta <= 17) {
+        await sendToUser(dose.userId, {
+          title: 'Nerva — lembrete final',
+          body: dose.medicationName
+            ? `Última chamada: ${dose.medicationName} das ${dose.scheduledTime} aguarda confirmação.`
+            : `Última chamada: medicamento das ${dose.scheduledTime} aguarda confirmação.`,
+          tag: `dose-post15-${dose.id}`,
+          url: '/dashboard',
+          data: { doseId: dose.id },
+        });
+        notified += 1;
+      }
+    }
   }
 
   return notified;
