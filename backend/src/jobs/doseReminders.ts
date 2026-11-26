@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { isPushConfigured, sendToUser } from '../modules/push/push.service';
+import { generateAndGetDoses, todayStr } from '../modules/doses/dose.service';
 
 // Envia lembretes push em 4 momentos por dose:
 //   10 min ANTES  → aviso antecipado (reminderSentAt ainda null)
@@ -9,6 +10,19 @@ import { isPushConfigured, sendToUser } from '../modules/push/push.service';
 //    5 min DEPOIS → lembrete pós, se ainda pending
 //   15 min DEPOIS → último lembrete, se ainda pending
 // Cada janela tem uma tag única para não sobrescrever a anterior no dispositivo.
+
+// IMPORTANTE: gera as doses do dia para todos os usuários com medicamentos ativos
+// antes de verificar lembretes — assim o cron não depende do usuário abrir o app.
+async function ensureAllDosesGenerated(date: string): Promise<void> {
+  // Busca todos os usuários que têm medicamentos ativos
+  const users = await prisma.user.findMany({
+    where: { medications: { some: { active: true } } },
+    select: { id: true },
+  });
+  await Promise.all(
+    users.map((u) => generateAndGetDoses(u.id, date).catch(() => undefined)),
+  );
+}
 
 let task: cron.ScheduledTask | null = null;
 
@@ -30,6 +44,10 @@ export async function runDoseReminders(now = new Date()): Promise<number> {
   if (!isPushConfigured()) return 0;
 
   const { date: today, minutes: nowMinutes } = nowInAppTz(now);
+
+  // Garante que as doses do dia existem para todos os usuários com meds ativos.
+  // Sem isso, o cron não encontra doses se o usuário não abriu o app hoje.
+  await ensureAllDosesGenerated(today);
 
   const allToday = await prisma.doseLog.findMany({
     where: { scheduledDate: today },
