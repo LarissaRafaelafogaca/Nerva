@@ -7,8 +7,11 @@ const REFRESH_COOKIE = 'refresh_token';
 function setRefreshCookie(res: Response, token: string): void {
   res.cookie(REFRESH_COOKIE, token, {
     httpOnly: true,
-    secure: env.isProd,
-    sameSite: 'lax',
+    secure: true, // sempre secure — Railway é sempre HTTPS
+    // 'none' é necessário para cookies cross-site (Vercel → Railway).
+    // 'lax' bloquearia o cookie no Safari quando frontend e backend
+    // estão em domínios diferentes.
+    sameSite: 'none',
     maxAge: 1000 * 60 * 60 * 24 * 30,
     path: '/api/auth',
   });

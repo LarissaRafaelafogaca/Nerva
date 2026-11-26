@@ -33,6 +33,17 @@ export const authClient = {
     const res = await http.post('/auth/verify-pin', { pin });
     return !!res?.ok;
   },
+  // Renova o access token usando o refresh token em cookie httpOnly.
+  // Usado ao iniciar o app quando o localStorage foi limpo pelo iOS.
+  async refresh() {
+    try {
+      const data = await http.post('/auth/refresh', {}, { auth: false });
+      if (data?.access_token) setAccessToken(data.access_token);
+      return data;
+    } catch {
+      return null;
+    }
+  },
   setToken(token) {
     setAccessToken(token);
   },

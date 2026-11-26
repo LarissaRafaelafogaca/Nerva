@@ -26,13 +26,29 @@ export const AuthProvider = ({ children }) => {
         const publicSettings = await base44.app.getPublicSettings();
         setAppPublicSettings(publicSettings);
         
-        // If we got the app public settings successfully, check if user is authenticated
+        // Tenta autenticar: primeiro pelo token no localStorage, depois pelo
+        // refresh token em cookie httpOnly (que persiste mesmo quando o iOS
+        // apaga o localStorage ao fechar o PWA).
         if (appParams.token) {
           await checkUserAuth();
         } else {
-          setIsLoadingAuth(false);
-          setIsAuthenticated(false);
-          setAuthChecked(true);
+          // Sem token local — tenta renovar via cookie de refresh.
+          // Se o cookie existir, o backend emite um novo access token.
+          try {
+            const refreshData = await base44.auth.refresh?.();
+            if (refreshData?.access_token) {
+              base44.auth.setToken(refreshData.access_token);
+              await checkUserAuth();
+            } else {
+              setIsLoadingAuth(false);
+              setIsAuthenticated(false);
+              setAuthChecked(true);
+            }
+          } catch {
+            setIsLoadingAuth(false);
+            setIsAuthenticated(false);
+            setAuthChecked(true);
+          }
         }
         setIsLoadingPublicSettings(false);
       } catch (appError) {
