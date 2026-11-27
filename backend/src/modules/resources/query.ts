@@ -1,14 +1,6 @@
 import { ResourceConfig } from './resource.registry';
 import { BadRequest } from '../../utils/errors';
 
-// Traduz uma query de filtro no estilo Base44 (nomes FE, operador $gte, etc.)
-// para um `where` do Prisma (nomes de campo do modelo).
-//
-// Suporta:
-//   { campo: valor }                  -> igualdade
-//   { campo: { $gte: v } }            -> gte (também $gt, $lte, $lt, $ne, $in)
-//
-// Sempre é combinado com o escopo de dono/admin no service (nunca sozinho).
 export function buildWhere(
   filter: Record<string, any> | undefined,
   cfg: ResourceConfig,
@@ -18,10 +10,7 @@ export function buildWhere(
 
   for (const [feField, rawValue] of Object.entries(filter)) {
     const prismaField = cfg.fieldMap[feField];
-    if (!prismaField) {
-      // Ignora campos desconhecidos em vez de vazar erro de esquema.
-      continue;
-    }
+    if (!prismaField) continue;
     where[prismaField] = translateValue(prismaField, rawValue, cfg);
   }
   return where;
@@ -32,21 +21,11 @@ function translateValue(prismaField: string, value: any, cfg: ResourceConfig): a
     const out: Record<string, any> = {};
     for (const [op, opVal] of Object.entries(value)) {
       switch (op) {
-        case '$gte':
-          out.gte = coerceScalar(prismaField, opVal, cfg);
-          break;
-        case '$gt':
-          out.gt = coerceScalar(prismaField, opVal, cfg);
-          break;
-        case '$lte':
-          out.lte = coerceScalar(prismaField, opVal, cfg);
-          break;
-        case '$lt':
-          out.lt = coerceScalar(prismaField, opVal, cfg);
-          break;
-        case '$ne':
-          out.not = coerceScalar(prismaField, opVal, cfg);
-          break;
+        case '$gte': out.gte = coerceScalar(prismaField, opVal, cfg); break;
+        case '$gt':  out.gt  = coerceScalar(prismaField, opVal, cfg); break;
+        case '$lte': out.lte = coerceScalar(prismaField, opVal, cfg); break;
+        case '$lt':  out.lt  = coerceScalar(prismaField, opVal, cfg); break;
+        case '$ne':  out.not = coerceScalar(prismaField, opVal, cfg); break;
         case '$in':
           out.in = Array.isArray(opVal) ? opVal.map((v) => coerceScalar(prismaField, v, cfg)) : [];
           break;
@@ -59,7 +38,6 @@ function translateValue(prismaField: string, value: any, cfg: ResourceConfig): a
   return coerceScalar(prismaField, value, cfg);
 }
 
-// Campos de data-hora armazenados como DateTime precisam ser convertidos.
 const DATETIME_FIELDS = new Set(['dateTime', 'takenAt', 'createdAt', 'updatedAt']);
 
 function coerceScalar(prismaField: string, value: any, _cfg: ResourceConfig): any {
@@ -70,7 +48,6 @@ function coerceScalar(prismaField: string, value: any, _cfg: ResourceConfig): an
   return value;
 }
 
-// Converte a string de ordenação do SDK (ex.: '-date_time') em orderBy do Prisma.
 export function buildOrderBy(
   sort: string | undefined,
   cfg: ResourceConfig,

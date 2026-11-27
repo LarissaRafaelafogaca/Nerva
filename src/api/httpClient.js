@@ -1,14 +1,6 @@
-// Cliente HTTP do NERVA que fala com o backend próprio (Express + Prisma).
-// Substitui o SDK proprietário anterior. Cuida de:
-//  - base URL configurável (VITE_API_URL)
-//  - bearer token em localStorage
-//  - renovação automática via refresh token (uma tentativa)
-//  - erros com { status, message, data } compatíveis com o código existente.
-
 const API_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 const ACCESS_TOKEN_KEY = 'nerva_access_token';
-// Chaves legadas mantidas por compatibilidade com utilitários existentes.
 const LEGACY_KEYS = ['base44_access_token', 'token'];
 
 export function getAccessToken() {
@@ -23,7 +15,6 @@ export function getAccessToken() {
 export function setAccessToken(token) {
   if (token) {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
-    // mantém as chaves legadas em sincronia
     localStorage.setItem('base44_access_token', token);
   }
 }
@@ -44,7 +35,6 @@ export class ApiError extends Error {
 let refreshingPromise = null;
 
 async function tryRefresh() {
-  // Evita múltiplas renovações simultâneas.
   if (!refreshingPromise) {
     refreshingPromise = (async () => {
       const res = await fetch(`${API_URL}/auth/refresh`, {
@@ -97,7 +87,6 @@ export async function request(method, path, { body, query, auth = true, _retried
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  // Access token expirado -> tenta renovar uma vez.
   if (res.status === 401 && auth && !_retried && getAccessToken()) {
     try {
       const newToken = await tryRefresh();

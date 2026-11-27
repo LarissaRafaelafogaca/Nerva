@@ -1,12 +1,9 @@
 import { env } from '../../config/env';
 
-// Envia e-mail via Resend (se RESEND_API_KEY estiver configurado) ou loga no
-// console em desenvolvimento. Nunca expõe dados sensíveis em produção.
 async function sendMail(to: string, subject: string, text: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (apiKey) {
-    // Usa o Resend (produção)
     const { Resend } = await import('resend');
     const resend = new Resend(apiKey);
     await resend.emails.send({
@@ -18,7 +15,6 @@ async function sendMail(to: string, subject: string, text: string): Promise<void
     return;
   }
 
-  // Sem SMTP/Resend configurado: loga no console (desenvolvimento)
   if (!env.isProd) {
     // eslint-disable-next-line no-console
     console.log(`[MAIL:dev] to=${to} subject="${subject}"\n${text}`);

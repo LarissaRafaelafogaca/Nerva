@@ -3,17 +3,13 @@ import crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
-import {
-  signAccessToken,
-  signRefreshToken,
-  verifyRefreshToken,
-} from '../../config/auth';
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../config/auth';
 import { BadRequest, Conflict, Unauthorized } from '../../utils/errors';
 import { serializeUser } from '../../utils/serialize';
 import { sendOtpEmail, sendPasswordResetEmail } from './mailer';
 import { isAdminEmail } from '../../config/env';
 
-// Papel/perfil derivados EXCLUSIVAMENTE do e-mail autorizado — nunca do cliente.
+// role/profile derivados exclusivamente do ADMIN_EMAILS — nunca do cliente
 function roleForEmail(email: string): { role: 'admin' | 'user'; profile: 'admin' | 'patient' } {
   return isAdminEmail(email)
     ? { role: 'admin', profile: 'admin' }
@@ -21,8 +17,6 @@ function roleForEmail(email: string): { role: 'admin' | 'user'; profile: 'admin'
 }
 
 const googleClient = env.google.clientId ? new OAuth2Client(env.google.clientId) : null;
-
-// ---------- Helpers de hash/token ----------
 
 function hashToken(raw: string): string {
   return crypto.createHash('sha256').update(raw).digest('hex');
@@ -42,10 +36,9 @@ async function issueRefreshToken(userId: string): Promise<string> {
     data: {
       userId,
       tokenHash: hashToken(raw),
-      expiresAt: minutesFromNow(60 * 24 * 30), // 30 dias
+      expiresAt: minutesFromNow(60 * 24 * 30),
     },
   });
-  // O token entregue ao cliente carrega o jti para lookup + o segredo raw.
   return signRefreshToken({ sub: userId, jti: record.id }) + '.' + raw;
 }
 
@@ -65,8 +58,6 @@ async function issueTokens(user: { id: string; role: any; profile: any }): Promi
   };
 }
 
-// ---------- Cadastro + OTP ----------
-
 export async function register(input: {
   email: string;
   password: string;
@@ -75,9 +66,7 @@ export async function register(input: {
 }): Promise<{ email: string }> {
   const email = input.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing && existing.emailVerified) {
-    throw Conflict('Email already registered');
-  }
+  if (existing && existing.emailVerified) throw Conflict('Email already registered');
 
   const passwordHash = await argon2.hash(input.password);
   const { role, profile } = roleForEmail(email);
@@ -85,12 +74,7 @@ export async function register(input: {
   const user = existing
     ? await prisma.user.update({
         where: { id: existing.id },
-        data: {
-          passwordHash,
-          fullName: input.full_name ?? existing.fullName,
-          role,
-          profile,
-        },
+        data: { passwordHash, fullName: input.full_name ?? existing.fullName, role, profile },
       })
     : await prisma.user.create({
         data: {
@@ -100,24 +84,22 @@ export async function register(input: {
           provider: 'local',
           role,
           profile,
-          // Se SKIP_EMAIL_VERIFICATION=true ou não há serviço de e-mail, verifica automaticamente.
-          emailVerified: process.env.SKIP_EMAIL_VERIFICATION === 'true' ||
-            (!process.env.SMTP_HOST && !process.env.RESEND_API_KEY)
-            ? true
-            : false,
+          emailVerified:
+            process.env.SKIP_EMAIL_VERIFICATION === 'true' ||
+            (!process.env.SMTP_HOST && !process.env.RESEND_API_KEY),
         },
       });
 
-  // Só envia OTP se houver serviço de e-mail configurado.
-  const hasEmail = !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY) &&
+  const hasEmail =
+    !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY) &&
     process.env.SKIP_EMAIL_VERIFICATION !== 'true';
+
   if (hasEmail && !user.emailVerified) {
     const devCode = await createAndSendOtp(user.id, email);
     const exposeDevCode = !env.isProd && !env.smtp.host;
     return { email, ...(exposeDevCode ? { dev_otp: devCode } : {}) };
   }
 
-  // Sem e-mail: marca como verificado e retorna sem OTP.
   if (!user.emailVerified) {
     await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
   }
@@ -128,14 +110,10 @@ async function createAndSendOtp(userId: string, email: string): Promise<string> 
   const code = generateOtp();
   await prisma.emailVerificationToken.updateMany({
     where: { userId, usedAt: null },
-    data: { usedAt: new Date() }, // invalida códigos anteriores
+    data: { usedAt: new Date() },
   });
   await prisma.emailVerificationToken.create({
-    data: {
-      userId,
-      codeHash: hashToken(code),
-      expiresAt: minutesFromNow(env.otpExpiresMinutes),
-    },
+    data: { userId, codeHash: hashToken(code), expiresAt: minutesFromNow(env.otpExpiresMinutes) },
   });
   await sendOtpEmail(email, code);
   return code;
@@ -143,7 +121,6 @@ async function createAndSendOtp(userId: string, email: string): Promise<string> 
 
 export async function resendOtp(email: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  // Não revela existência da conta.
   if (!user || user.emailVerified) return;
   await createAndSendOtp(user.id, user.email);
 }
@@ -162,20 +139,10 @@ export async function verifyOtp(input: {
   if (!token || token.expiresAt < new Date()) throw BadRequest('Invalid or expired verification code');
   if (token.codeHash !== hashToken(input.otpCode)) throw BadRequest('Invalid verification code');
 
-  await prisma.emailVerificationToken.update({
-    where: { id: token.id },
-    data: { usedAt: new Date() },
-  });
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { emailVerified: true },
-  });
-
-  const tokens = await issueTokens(updated);
-  return { ...tokens, user: serializeUser(updated) };
+  await prisma.emailVerificationToken.update({ where: { id: token.id }, data: { usedAt: new Date() } });
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+  return { ...(await issueTokens(updated)), user: serializeUser(updated) };
 }
-
-// ---------- Login tradicional ----------
 
 export async function login(input: { email: string; password: string }): Promise<AuthTokens & { user: any }> {
   const user = await prisma.user.findUnique({ where: { email: input.email.toLowerCase() } });
@@ -185,32 +152,20 @@ export async function login(input: { email: string; password: string }): Promise
   if (!ok) throw Unauthorized('Invalid credentials');
   if (!user.emailVerified) throw Unauthorized('Email not verified');
 
-  const tokens = await issueTokens(user);
-  return { ...tokens, user: serializeUser(user) };
+  return { ...(await issueTokens(user)), user: serializeUser(user) };
 }
-
-// ---------- Google ----------
 
 export async function loginWithGoogleIdToken(input: {
   credential: string;
   profile?: 'patient' | 'admin';
 }): Promise<AuthTokens & { user: any }> {
   if (!googleClient) throw BadRequest('Google login is not configured');
-  const ticket = await googleClient.verifyIdToken({
-    idToken: input.credential,
-    audience: env.google.clientId,
-  });
+  const ticket = await googleClient.verifyIdToken({ idToken: input.credential, audience: env.google.clientId });
   const payload = ticket.getPayload();
   if (!payload?.email) throw Unauthorized('Invalid Google token');
-  return upsertGoogleUser({
-    email: payload.email,
-    providerId: payload.sub,
-    fullName: payload.name,
-    profile: input.profile,
-  });
+  return upsertGoogleUser({ email: payload.email, providerId: payload.sub, fullName: payload.name, profile: input.profile });
 }
 
-// Fluxo de redirect: troca o `code` do OAuth por tokens e resolve o usuário.
 export async function exchangeGoogleCode(code: string): Promise<AuthTokens & { user: any }> {
   if (!env.google.clientId || !env.google.clientSecret) throw BadRequest('Google login is not configured');
   const client = new OAuth2Client(env.google.clientId, env.google.clientSecret, env.google.callbackUrl);
@@ -219,11 +174,7 @@ export async function exchangeGoogleCode(code: string): Promise<AuthTokens & { u
   const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: env.google.clientId });
   const payload = ticket.getPayload();
   if (!payload?.email) throw Unauthorized('Invalid Google token');
-  return upsertGoogleUser({
-    email: payload.email,
-    providerId: payload.sub,
-    fullName: payload.name,
-  });
+  return upsertGoogleUser({ email: payload.email, providerId: payload.sub, fullName: payload.name });
 }
 
 export async function upsertGoogleUser(input: {
@@ -233,46 +184,22 @@ export async function upsertGoogleUser(input: {
   profile?: 'patient' | 'admin';
 }): Promise<AuthTokens & { user: any }> {
   const email = input.email.toLowerCase();
-  // O role/profile é SEMPRE derivado do ADMIN_EMAILS — se o email consta na
-  // lista, ele é admin independentemente do que estava salvo no banco. Isso
-  // garante que adicionar um email ao ADMIN_EMAILS tenha efeito imediato no
-  // próximo login, sem precisar alterar manualmente o banco.
   const { role, profile } = roleForEmail(email);
   let user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
     user = await prisma.user.create({
-      data: {
-        email,
-        fullName: input.fullName ?? undefined,
-        provider: 'google',
-        providerId: input.providerId,
-        emailVerified: true,
-        role,
-        profile,
-      },
+      data: { email, fullName: input.fullName ?? undefined, provider: 'google', providerId: input.providerId, emailVerified: true, role, profile },
     });
   } else {
     user = await prisma.user.update({
       where: { id: user.id },
-      data: {
-        provider: 'google',
-        providerId: input.providerId,
-        emailVerified: true,
-        role,
-        profile,
-        fullName: user.fullName ?? input.fullName ?? undefined,
-      },
+      data: { provider: 'google', providerId: input.providerId, emailVerified: true, role, profile, fullName: user.fullName ?? input.fullName ?? undefined },
     });
   }
-  const tokens = await issueTokens(user);
-  return { ...tokens, user: serializeUser(user) };
+  return { ...(await issueTokens(user)), user: serializeUser(user) };
 }
 
-// ---------- Refresh / logout ----------
-
 export async function refresh(rawToken: string): Promise<AuthTokens> {
-  // O formato é `<jwt>.<rawSecret>` — o JWT tem 3 segmentos separados por ponto,
-  // então o segredo raw começa a partir do 4º segmento.
   const parts = rawToken.split('.');
   const raw = parts.slice(3).join('.');
   const jwt = parts.slice(0, 3).join('.');
@@ -293,12 +220,8 @@ export async function refresh(rawToken: string): Promise<AuthTokens> {
   const user = await prisma.user.findUnique({ where: { id: payload.sub } });
   if (!user) throw Unauthorized('User not found');
 
-  // Rotação: revoga o antigo e emite um novo.
   await prisma.refreshToken.update({ where: { id: record.id }, data: { revokedAt: new Date() } });
-  return {
-    access_token: accessTokenFor(user),
-    refresh_token: await issueRefreshToken(user.id),
-  };
+  return { access_token: accessTokenFor(user), refresh_token: await issueRefreshToken(user.id) };
 }
 
 export async function logout(rawToken?: string): Promise<void> {
@@ -312,22 +235,16 @@ export async function logout(rawToken?: string): Promise<void> {
       data: { revokedAt: new Date() },
     });
   } catch {
-    // token inválido: nada a fazer
+    // invalid token — nothing to do
   }
 }
 
-// ---------- Reset de senha ----------
-
 export async function requestPasswordReset(email: string): Promise<void> {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.passwordHash) return; // não enumera contas / contas Google
+  if (!user || !user.passwordHash) return;
   const raw = crypto.randomBytes(32).toString('hex');
   await prisma.passwordResetToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(raw),
-      expiresAt: minutesFromNow(env.passwordResetExpiresMinutes),
-    },
+    data: { userId: user.id, tokenHash: hashToken(raw), expiresAt: minutesFromNow(env.passwordResetExpiresMinutes) },
   });
   await sendPasswordResetEmail(user.email, raw);
 }
@@ -342,15 +259,9 @@ export async function resetPassword(input: { resetToken: string; newPassword: st
   await prisma.$transaction([
     prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
     prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
-    // revoga sessões existentes por segurança
-    prisma.refreshToken.updateMany({
-      where: { userId: record.userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    }),
+    prisma.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
   ]);
 }
-
-// ---------- me / updateMe ----------
 
 export async function getMe(userId: string): Promise<any> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -358,15 +269,12 @@ export async function getMe(userId: string): Promise<any> {
   return serializeUser(user);
 }
 
-// Emite um novo access token com os dados atuais do banco para o usuário.
-// Usado pelo endpoint /me para garantir que role/profile estejam sempre frescos.
 export async function reissueAccessToken(userId: string): Promise<{ access_token: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Unauthorized('User not found');
   return { access_token: accessTokenFor(user) };
 }
 
-// Verifica o PIN de bloqueio de tela do usuário autenticado (contra o hash argon2).
 export async function verifyPin(userId: string, pin: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw Unauthorized('User not found');
@@ -388,8 +296,7 @@ export async function updateMe(userId: string, input: any): Promise<any> {
   if (input.full_name !== undefined) data.fullName = input.full_name;
   if (input.language !== undefined) data.language = input.language;
   if (input.theme !== undefined) data.theme = input.theme;
-  // `profile`/`role` NUNCA são definidos pelo cliente. São sempre derivados do
-  // e-mail autorizado, garantindo que só o admin oficial tenha acesso admin.
+  // `profile`/`role` NUNCA são definidos pelo cliente — sempre derivados do e-mail autorizado
   const { role, profile } = roleForEmail(current.email);
   data.role = role;
   data.profile = profile;
@@ -402,7 +309,6 @@ export async function updateMe(userId: string, input: any): Promise<any> {
   return serializeUser(updated);
 }
 
-// Faz merge das preferências e hasheia o PIN quando um novo valor em claro é enviado.
 async function mergePreferences(existing: any, incoming: any): Promise<any> {
   const base = (existing && typeof existing === 'object' ? existing : {}) as any;
   const merged: any = {
@@ -416,7 +322,6 @@ async function mergePreferences(existing: any, incoming: any): Promise<any> {
     if (incomingPin === null || incomingPin === '') {
       merged.security.pin = null;
     } else if (incomingPin === '__set__') {
-      // marcador ecoado de volta pelo cliente: mantém o hash existente
       merged.security.pin = base.security?.pin ?? null;
     } else {
       merged.security.pin = await argon2.hash(String(incomingPin));

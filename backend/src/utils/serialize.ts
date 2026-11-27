@@ -1,7 +1,3 @@
-// Traduz os modelos do Prisma (camelCase) para a forma que o front-end espera
-// (mesmos nomes de campo usados pelo antigo SDK Base44), incluindo os campos de
-// sistema `id`, `created_by_id` e `created_date`.
-
 type AnyRecord = Record<string, any>;
 
 function iso(d: Date | null | undefined): string | null {
@@ -11,7 +7,6 @@ function iso(d: Date | null | undefined): string | null {
 export function serializeUser(u: AnyRecord): AnyRecord {
   if (!u) return u;
   const prefs = (u.preferences ?? {}) as AnyRecord;
-  // Nunca expõe o PIN em claro/hash: apenas indica se está definido.
   let preferences = u.preferences ?? undefined;
   if (prefs?.security && typeof prefs.security === 'object') {
     const security = { ...prefs.security };

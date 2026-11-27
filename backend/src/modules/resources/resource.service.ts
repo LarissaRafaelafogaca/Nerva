@@ -4,14 +4,11 @@ import { AuthUser } from '../../middleware/auth';
 import { isAdminUser } from '../../middleware/rbac';
 import { Forbidden, NotFound } from '../../utils/errors';
 
-// Escopo de segurança (RLS): não-admin só enxerga os próprios registros.
-// Admin não recebe filtro de dono. NUNCA confia em user_id vindo do cliente.
+// NUNCA confia em user_id vindo do cliente — userId vem sempre do JWT.
 function ownershipWhere(user: AuthUser): Record<string, any> {
   return isAdminUser(user) ? {} : { userId: user.id };
 }
 
-// Converte um objeto FE (snake) em dados Prisma (camel), ignorando campos de
-// sistema que o cliente não deve definir.
 function toPrismaData(feData: Record<string, any>, cfg: ResourceConfig): Record<string, any> {
   const coerced = cfg.coerce ? cfg.coerce({ ...feData }) : { ...feData };
   const data: Record<string, any> = {};
@@ -46,8 +43,6 @@ export async function create(
   const model = getModelDelegate(cfg.model);
   const data = { ...toPrismaData(feData, cfg), userId: user.id };
 
-  // SleepRecord tem unique(userId, date) — faz upsert para não falhar se o
-  // usuário tentar registrar sono duas vezes no mesmo dia.
   if (cfg.model === 'sleepRecord' && (data as any).date) {
     const date = (data as any).date as string;
     const row = await model.upsert({
@@ -74,15 +69,11 @@ export async function bulkCreate(
   return created.map(cfg.serialize);
 }
 
-// Garante que o registro pertence ao usuário (ou que ele é admin).
 async function assertOwnership(cfg: ResourceConfig, user: AuthUser, id: string): Promise<any> {
   const model = getModelDelegate(cfg.model);
   const row = await model.findUnique({ where: { id } });
   if (!row) throw NotFound('Resource not found');
-  if (!isAdminUser(user) && row.userId !== user.id) {
-    // Não revela existência de recurso de outro usuário.
-    throw NotFound('Resource not found');
-  }
+  if (!isAdminUser(user) && row.userId !== user.id) throw NotFound('Resource not found');
   return row;
 }
 
@@ -123,11 +114,9 @@ export async function deleteMany(
   filter: Record<string, any>,
 ): Promise<{ count: number }> {
   const model = getModelDelegate(cfg.model);
-  // Exclusão em massa é destrutiva: SEMPRE restringimos ao usuário autenticado,
-  // INCLUSIVE para admin. "Apagar meus dados" jamais deve tocar dados de outra
-  // pessoa. Ignoramos qualquer created_by_id/userId vindo do filtro do cliente.
+  // deleteMany sempre restringido ao usuário autenticado — nunca aceita userId do cliente
   const clientFilter = buildWhere(filter, cfg);
-  delete clientFilter.userId; // nunca aceita dono vindo do cliente
+  delete clientFilter.userId;
   const where = { ...clientFilter, userId: user.id };
   const result = await model.deleteMany({ where });
   return { count: result.count };

@@ -1,7 +1,3 @@
-# Inicia backend, front-end e o túnel HTTPS FIXO (ngrok) do Nerva.
-# Uso: clique com o direito -> "Executar com PowerShell", ou rode:
-#   powershell -ExecutionPolicy Bypass -File .\iniciar-tudo.ps1
-
 $root = $PSScriptRoot
 $ngrok = "C:\Users\laris\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe"
 $dominio = "ride-amends-purging.ngrok-free.dev"   # URL fixa do app

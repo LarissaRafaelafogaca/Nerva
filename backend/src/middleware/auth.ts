@@ -20,12 +20,10 @@ declare global {
 function extractToken(req: Request): string | null {
   const header = req.headers.authorization;
   if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
-  // fallback para cookie de sessão
   const cookieToken = (req as any).cookies?.access_token;
   return cookieToken ?? null;
 }
 
-// Exige autenticação. Preenche req.user a partir do JWT (nunca de dados do corpo).
 export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
   const token = extractToken(req);
   if (!token) throw Unauthorized('Authentication required');
@@ -38,7 +36,6 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 }
 
-// Autenticação opcional: não falha se ausente.
 export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
   const token = extractToken(req);
   if (!token) return next();
@@ -46,7 +43,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     const payload = verifyAccessToken(token);
     req.user = { id: payload.sub, role: payload.role, profile: payload.profile };
   } catch {
-    // ignora token inválido no modo opcional
+    // ignore invalid token in optional mode
   }
   next();
 }

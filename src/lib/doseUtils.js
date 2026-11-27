@@ -1,7 +1,4 @@
-// Utility functions for dose log management
-
 export function todayStr() {
-  // Usa o fuso local do dispositivo do usuário para determinar "hoje".
   const d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -24,18 +21,12 @@ export function formatTime(timeStr) {
   return `${displayHour}:${m || '00'} ${ampm}`;
 }
 
-// Busca (e gera no servidor se necessário) as doses do dia atual.
-// Usa o endpoint dedicado /api/doses?date=... do backend, que:
-//   - gera doses pending para medicamentos ativos do dia (server-side, sem duplicação)
-//   - retorna o estado atual — incluindo doses já marcadas como missed pelo cron
-// O parâmetro `medications` é mantido por compatibilidade mas não é mais usado.
 export async function ensureTodayDoses(_medications) {
   const { base44 } = await import('@/api/base44Client');
   const today = todayStr();
   return base44.doses.getToday(today);
 }
 
-// Calculate adherence rate from dose logs
 export function calculateAdherence(doseLogs) {
   if (!doseLogs.length) return { rate: 0, taken: 0, missed: 0, skipped: 0, pending: 0, total: 0 };
   const taken = doseLogs.filter((d) => d.status === 'taken').length;
@@ -47,7 +38,6 @@ export function calculateAdherence(doseLogs) {
   return { rate, taken, missed, skipped, pending, total: doseLogs.length };
 }
 
-// Get last N days as array of date strings
 export function getLastNDays(n) {
   const days = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -58,7 +48,6 @@ export function getLastNDays(n) {
   return days;
 }
 
-// Get greeting based on hour
 export function getGreeting(t) {
   const h = new Date().getHours();
   if (h < 12) return t('dashboard.greetingMorning');
@@ -66,5 +55,3 @@ export function getGreeting(t) {
   if (h < 22) return t('dashboard.greetingEvening');
   return t('dashboard.greetingNight');
 }
-
-

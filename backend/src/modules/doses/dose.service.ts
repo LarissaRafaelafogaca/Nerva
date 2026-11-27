@@ -4,29 +4,19 @@ import { NotFound } from '../../utils/errors';
 import { AuthUser } from '../../middleware/auth';
 import { isAdminUser } from '../../middleware/rbac';
 
-// Regras de negócio de doses no backend (a fonte de verdade — o front-end não
-// decide se uma dose existe). Datas usam formato YYYY-MM-DD.
-
 const GRACE_PERIOD_MINUTES = 120;
 
 export function todayStr(now = new Date()): string {
-  // Usa o fuso configurado em APP_TIMEZONE para determinar a data "hoje".
-  // Sem isso, às 21h em Brasília o backend já retorna o dia seguinte (UTC).
+  // APP_TIMEZONE garante que "hoje" é calculado no fuso do usuário, não em UTC
   const tz = process.env.APP_TIMEZONE || 'UTC';
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
   });
-  return fmt.format(now); // retorna YYYY-MM-DD no fuso correto
+  return fmt.format(now);
 }
 
-// Gera as doses previstas para uma data a partir dos medicamentos ativos,
-// evitando duplicação (constraint única cobre concorrência). Retorna as doses do dia.
 export async function generateAndGetDoses(userId: string, date: string): Promise<any[]> {
   const meds = await prisma.medication.findMany({ where: { userId, active: true } });
-
   const existing = await prisma.doseLog.findMany({ where: { userId, scheduledDate: date } });
   const existingKeys = new Set(existing.map((d) => `${d.medicationId}_${d.scheduledTime ?? ''}`));
 
@@ -49,7 +39,6 @@ export async function generateAndGetDoses(userId: string, date: string): Promise
   }
 
   if (toCreate.length) {
-    // skipDuplicates respeita a constraint única e cobre concorrência
     await prisma.doseLog.createMany({ data: toCreate, skipDuplicates: true });
   }
 
@@ -73,7 +62,6 @@ export async function takeDose(user: AuthUser, id: string): Promise<any> {
     where: { id },
     data: { status: 'taken', takenAt: new Date() },
   });
-  // Verifica marcos de sequência e envia push de parabéns (assíncrono, não bloqueia).
   void checkStreakMilestone(user.id).catch(() => undefined);
   return serializeDoseLog(dose);
 }
@@ -87,10 +75,6 @@ export async function skipDose(user: AuthUser, id: string): Promise<any> {
   return serializeDoseLog(dose);
 }
 
-// Marca como missed as doses pending vencidas.
-// - dias anteriores -> missed
-// - hoje -> missed apenas após tolerância (120 min) do horário programado
-// Não altera taken/skipped. `scopeUserId` limita a um usuário (opcional; o cron roda global).
 export async function markMissedDoses(now = new Date(), scopeUserId?: string): Promise<number> {
   const today = todayStr(now);
   const pending = await prisma.doseLog.findMany({
@@ -112,10 +96,7 @@ export async function markMissedDoses(now = new Date(), scopeUserId?: string): P
   }
 
   if (toMissIds.length) {
-    await prisma.doseLog.updateMany({
-      where: { id: { in: toMissIds } },
-      data: { status: 'missed' },
-    });
+    await prisma.doseLog.updateMany({ where: { id: { in: toMissIds } }, data: { status: 'missed' } });
   }
   return toMissIds.length;
 }
@@ -129,9 +110,7 @@ export interface Adherence {
   total: number;
 }
 
-export function computeAdherence(
-  doses: Array<{ status: string }>,
-): Adherence {
+export function computeAdherence(doses: Array<{ status: string }>): Adherence {
   const taken = doses.filter((d) => d.status === 'taken').length;
   const missed = doses.filter((d) => d.status === 'missed').length;
   const skipped = doses.filter((d) => d.status === 'skipped').length;
@@ -141,7 +120,6 @@ export function computeAdherence(
   return { rate, taken, missed, skipped, pending, total: doses.length };
 }
 
-// Adesão do usuário numa janela de N dias (ou período custom from/to em YYYY-MM-DD).
 export async function getAdherence(
   userId: string,
   opts: { days?: number; from?: string; to?: string },
@@ -167,14 +145,8 @@ export async function getAdherence(
   return { ...computeAdherence(doses), from, to };
 }
 
-// ---------------------------------------------------------------------------
-// Streak e parabéns via push
-// ---------------------------------------------------------------------------
-
 const STREAK_MILESTONES = [3, 7, 14, 21, 30, 60, 90, 180, 365];
 
-// Calcula a sequência de dias aderentes do usuário (espelho da lógica do front).
-// Um dia é aderente se tem pelo menos 1 dose tomada e 0 perdidas.
 async function calcStreak(userId: string): Promise<number> {
   const doses = await prisma.doseLog.findMany({
     where: { userId },
@@ -211,8 +183,6 @@ async function calcStreak(userId: string): Promise<number> {
   return streak;
 }
 
-// Após marcar uma dose como tomada, verifica se o usuário atingiu um marco e
-// envia um push de parabéns. Dispara de forma assíncrona (não bloqueia a resposta).
 async function checkStreakMilestone(userId: string): Promise<void> {
   const { sendToUser, isPushConfigured } = await import('../push/push.service');
   if (!isPushConfigured()) return;
@@ -221,9 +191,7 @@ async function checkStreakMilestone(userId: string): Promise<void> {
   if (!STREAK_MILESTONES.includes(streak)) return;
 
   const isBig = streak >= 30;
-  const title = isBig
-    ? `Incrível! ${streak} dias seguidos! 🏆`
-    : `${streak} dias seguidos! 🔥`;
+  const title = isBig ? `Incrível! ${streak} dias seguidos! 🏆` : `${streak} dias seguidos! 🔥`;
   const body = streak >= 30
     ? `Você é um exemplo de cuidado com a saúde. Continue assim!`
     : `Você está criando um ótimo hábito de adesão. Continue!`;
