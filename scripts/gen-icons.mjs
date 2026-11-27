@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.resolve(__dirname, '..', 'public', 'icons');
 fs.mkdirSync(outDir, { recursive: true });
 
-// Cor primária do Nerva (aprox. do tema — verde-azulado).
+
 const BG = [15, 118, 110]; // teal-700
 const FG = [255, 255, 255];
 
@@ -29,7 +29,7 @@ function chunk(type, data) {
   return Buffer.concat([len, body, crc]);
 }
 function encodePNG(size, pixels) {
-  // pixels: Uint8Array RGBA de size*size*4
+
   const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(size, 0);
@@ -73,12 +73,12 @@ function makeIcon(size, { maskable = false } = {}) {
     }
   };
 
-  // fundo (retângulo cheio; iOS aplica o próprio arredondamento)
+  
   for (let i = 0; i < size * size; i++) {
     px[i * 4] = BG[0]; px[i * 4 + 1] = BG[1]; px[i * 4 + 2] = BG[2]; px[i * 4 + 3] = 255;
   }
 
-  // motivo rede neural (nó central + 4 satélites + conexões)
+ 
   const R = (size - pad * 2) * 0.5;
   const outer = R * 0.62;
   const nodes = [
