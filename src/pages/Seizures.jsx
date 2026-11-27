@@ -242,11 +242,16 @@ export default function Seizures() {
             <Card className="p-4">
               <p className="text-xs font-medium text-muted-foreground mb-2">{t('seizures.topTriggers')}</p>
               <div className="flex flex-wrap gap-2">
-                {stats.topTriggers.map(([trigger, count]) => (
-                  <span key={trigger} className="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 font-medium">
-                    {t(`seizures.${trigger}`)} ({count})
-                  </span>
-                ))}
+                {stats.topTriggers.map(([trigger, count]) => {
+                  const label = t(`seizures.${trigger}`);
+                  // Se a chave não foi encontrada (retorna a própria chave), mostra o texto bruto
+                  const display = label.startsWith('seizures.') ? trigger : label;
+                  return (
+                    <span key={trigger} className="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-600 font-medium">
+                      {display} ({count})
+                    </span>
+                  );
+                })}
               </div>
             </Card>
           )}
@@ -285,15 +290,19 @@ export default function Seizures() {
                     {formatDate(sz.date_time)}
                     {sz.duration_minutes ? ` · ${sz.duration_minutes} ${t('common.minutes')}` : ''}
                   </p>
-                  {sz.triggers?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {sz.triggers.map((trig) => (
-                        <span key={trig} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-                          {t(`seizures.${trig}`)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                      {sz.triggers?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {sz.triggers.map((trig) => {
+                            const label = t(`seizures.${trig}`);
+                            const display = label.startsWith('seizures.') ? trig : label;
+                            return (
+                              <span key={trig} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
+                                {display}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                   {sz.notes && <p className="text-sm text-muted-foreground mt-2 italic">{sz.notes}</p>}
                 </div>
                 <div className="flex gap-1">
