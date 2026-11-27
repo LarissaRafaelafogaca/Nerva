@@ -786,7 +786,7 @@ const it = {
     triggerFatigue: "Stanchezza", triggerFlash: "Luci lampeggianti",
     triggerFever: "Febbre/alcol", triggerNone: "Nessun fattore",
     typeFocal: "Focale", typeGeneralized: "Generalizzata", typeAbsence: "Assenza",
-    typeTonicClonic: "Tono-clonica", typeMyoclonic: "Mioclonica", typeOther: "Altra",
+    typeTonicClonic: "Tonico-clonica", typeMyoclonic: "Mioclonica", typeOther: "Altra",
     sevMild: "Lieve", sevModerate: "Moderata", sevSevere: "Grave",
     noSeizures: "Nessuna crisi registrata", noSeizuresDesc: "Registrare le crisi aiuta a identificare pattern",
     seizureCount: "Crisi questo mese",

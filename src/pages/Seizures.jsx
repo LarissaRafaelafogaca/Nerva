@@ -274,7 +274,7 @@ export default function Seizures() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold capitalize">{t(`seizures.type${capFirst(sz.type)}`)}</h3>
+                    <h3 className="font-semibold capitalize">{t(`seizures.type${toPascal(sz.type)}`)}</h3>
                     {sz.severity && (
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${sevColor[sz.severity] || ''}`}>
                         {t(`seizures.sev${capFirst(sz.severity)}`)}
@@ -332,7 +332,7 @@ export default function Seizures() {
                       form.type === typ ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground'
                     }`}
                   >
-                    {t(`seizures.type${capFirst(typ)}`)}
+                    {t(`seizures.type${toPascal(typ)}`)}
                   </button>
                 ))}
               </div>
@@ -410,4 +410,11 @@ export default function Seizures() {
 function capFirst(s) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Converte snake_case para PascalCase para montar chaves de tradução.
+// Ex: 'tonic_clonic' → 'TonicClonic', 'focal' → 'Focal'
+function toPascal(s) {
+  if (!s) return '';
+  return s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
 }

@@ -271,7 +271,7 @@ export default function Dashboard() {
                     <Activity className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium capitalize">{t(`seizures.type${capFirst(sz.type)}`)}</p>
+                    <p className="text-sm font-medium capitalize">{t(`seizures.type${toPascal(sz.type)}`)}</p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(sz.date_time)} {sz.duration_minutes ? `· ${sz.duration_minutes} ${t('common.minutes')}` : ''}
                     </p>
@@ -316,6 +316,13 @@ export default function Dashboard() {
 function capFirst(s) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// Converte snake_case para PascalCase para montar chaves de tradução.
+// Ex: 'tonic_clonic' → 'TonicClonic'
+function toPascal(s) {
+  if (!s) return '';
+  return s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
 }
 
 // Conta dias consecutivos de adesão terminando em hoje.

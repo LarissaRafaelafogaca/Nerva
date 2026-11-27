@@ -264,7 +264,7 @@ export default function Patients() {
                     {detailData.seizures.map((sz) => (
                       <div key={sz.id} className="flex items-center justify-between bg-muted/30 rounded-lg px-3 py-2">
                         <div>
-                          <p className="text-sm font-medium capitalize">{t(`seizures.type${capFirst(sz.type)}`)}</p>
+                          <p className="text-sm font-medium capitalize">{t(`seizures.type${toPascal(sz.type)}`)}</p>
                           <p className="text-xs text-muted-foreground">{formatDate(sz.date_time)}</p>
                         </div>
                         {sz.severity && (
@@ -305,4 +305,9 @@ export default function Patients() {
 function capFirst(s) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function toPascal(s) {
+  if (!s) return '';
+  return s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
 }
