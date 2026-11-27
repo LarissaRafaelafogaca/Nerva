@@ -1,6 +1,3 @@
-// NERVA — Prisma schema
-// Banco: PostgreSQL. Toda alteração estrutural é versionada via `prisma migrate`.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,8 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ------------------------- Enums -------------------------
 
 enum Role {
   user
@@ -69,7 +64,6 @@ enum Mood {
   awful
 }
 
-// ------------------------- Usuário -------------------------
 
 model User {
   id            String       @id @default(uuid())
@@ -102,7 +96,6 @@ model User {
   @@map("users")
 }
 
-// ------------------------- Sessões / tokens -------------------------
 
 model RefreshToken {
   id        String    @id @default(uuid())
@@ -146,7 +139,6 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-// ------------------------- Domínio clínico -------------------------
 
 model Medication {
   id        String   @id @default(uuid())
@@ -186,7 +178,7 @@ model DoseLog {
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   medication Medication? @relation(fields: [medicationId], references: [id], onDelete: Cascade)
 
-  // Impede duplicação da mesma dose programada
+ 
   @@unique([userId, medicationId, scheduledDate, scheduledTime], name: "uniq_scheduled_dose")
   @@index([userId])
   @@index([userId, scheduledDate])
@@ -228,7 +220,6 @@ model SideEffect {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // SetNull: excluir o medicamento não destrói o histórico do efeito
   medication Medication? @relation(fields: [medicationId], references: [id], onDelete: SetNull)
 
   @@index([userId])
@@ -251,14 +242,14 @@ model SleepRecord {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Um registro por dia por usuário
+  
   @@unique([userId, date], name: "uniq_sleep_per_day")
   @@index([userId])
   @@index([userId, date])
   @@map("sleep_records")
 }
 
-// Inscrição de Web Push (um por dispositivo/navegador do usuário).
+
 model PushSubscription {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
@@ -274,7 +265,7 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
-// Check-in de humor diário (um registro por dia por usuário).
+
 model MoodLog {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
