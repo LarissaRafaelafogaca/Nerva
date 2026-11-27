@@ -1,7 +1,3 @@
-/**
- * Seed de DESENVOLVIMENTO — dados SINTÉTICOS.
- * NUNCA use dados reais de pacientes. Nomes, e-mails e registros são fictícios.
- */
 import 'dotenv/config';
 import argon2 from 'argon2';
 import { PrismaClient } from '@prisma/client';
@@ -19,8 +15,6 @@ async function main(): Promise<void> {
 
   const password = await argon2.hash('Password123');
 
-  // ---- Admin (Larissa Rafaela Fogaça) ----
-  // Deve bater com ADMIN_EMAILS no .env para ter acesso administrativo.
   const adminEmail = (process.env.ADMIN_EMAILS ?? 'larissarafaelafogaca@gmail.com')
     .split(',')[0]
     .trim()
@@ -38,7 +32,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // ---- Paciente 1 (sintético) ----
+  
   const patient = await prisma.user.upsert({
     where: { email: 'paciente@nerva.test' },
     update: {},
@@ -53,7 +47,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // ---- Paciente 2 (sintético) ----
+  
   const patient2 = await prisma.user.upsert({
     where: { email: 'paciente2@nerva.test' },
     update: {},
@@ -67,7 +61,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Limpa dados antigos dos pacientes de seed (idempotência)
+  
   for (const uid of [patient.id, patient2.id]) {
     await prisma.doseLog.deleteMany({ where: { userId: uid } });
     await prisma.sideEffect.deleteMany({ where: { userId: uid } });
@@ -76,7 +70,7 @@ async function main(): Promise<void> {
     await prisma.medication.deleteMany({ where: { userId: uid } });
   }
 
-  // Medicamentos do paciente 1
+  
   const med1 = await prisma.medication.create({
     data: {
       userId: patient.id,
@@ -100,7 +94,7 @@ async function main(): Promise<void> {
     },
   });
 
-  // Doses dos últimos 30 dias (mix de status)
+ 
   const doseData: any[] = [];
   for (let i = 30; i >= 1; i--) {
     const date = daysAgo(i);
@@ -122,7 +116,6 @@ async function main(): Promise<void> {
   }
   await prisma.doseLog.createMany({ data: doseData, skipDuplicates: true });
 
-  // Crises
   await prisma.seizure.createMany({
     data: [
       {
@@ -145,7 +138,7 @@ async function main(): Promise<void> {
     ],
   });
 
-  // Sono
+  
   const sleepData = [];
   for (let i = 7; i >= 1; i--) {
     sleepData.push({
@@ -159,7 +152,7 @@ async function main(): Promise<void> {
   }
   await prisma.sleepRecord.createMany({ data: sleepData, skipDuplicates: true });
 
-  // Efeito colateral
+  
   await prisma.sideEffect.create({
     data: {
       userId: patient.id,
