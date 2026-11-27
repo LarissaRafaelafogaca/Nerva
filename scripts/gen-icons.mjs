@@ -1,6 +1,3 @@
-// Gera os ícones PNG do PWA (sem dependências externas) a partir de um desenho
-// simples: fundo na cor da marca + nós/linhas evocando a rede neural do logo.
-// Uso: node scripts/gen-icons.mjs
 import zlib from 'node:zlib';
 import fs from 'node:fs';
 import path from 'node:path';
